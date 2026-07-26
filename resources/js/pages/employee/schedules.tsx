@@ -66,7 +66,9 @@ interface ScheduleOccurrence {
     direction: ScheduleDirection;
     departure_time: string;
     effective_capacity: number;
-    priority_seat_count: number;
+    priority_seats?: number[];
+    unavailable_seats?: number[];
+    priority_seat_count?: number;
     occupied_seats: number[];
     available_eligible_seats: number;
     eligible_capacity: number;
@@ -82,6 +84,8 @@ interface ScheduleOccurrence {
         tier: string;
     };
     queue_size: number;
+    waitlist_enabled?: boolean;
+    waitlist_capacity?: number | null;
     booking_open?: boolean;
 }
 
@@ -216,6 +220,11 @@ function ScheduleCard({
         schedule.eligible_capacity > 0 ? Math.min(100, Math.round((usedEligibleSeats / schedule.eligible_capacity) * 100)) : 100;
     const isAutoAssigned = schedule.reservation?.source === 'AUTO_ASSIGNED';
     const bookingOpen = schedule.booking_open !== false;
+    const prioritySeats = schedule.priority_seats ?? Array.from({ length: schedule.priority_seat_count ?? 0 }, (_, index) => index + 1);
+    const unavailableSeats = schedule.unavailable_seats ?? [];
+    const waitlistEnabled = schedule.waitlist_enabled !== false;
+    const waitlistIsFull =
+        schedule.waitlist_capacity !== null && schedule.waitlist_capacity !== undefined && schedule.queue_size >= schedule.waitlist_capacity;
 
     return (
         <Card className="group overflow-hidden transition-shadow hover:shadow-md">
@@ -251,6 +260,8 @@ function ScheduleCard({
                                 </Badge>
                             )}
                             {!bookingOpen && <Badge variant="secondary">Booking closed</Badge>}
+                            {bookingOpen && !waitlistEnabled && <Badge variant="outline">Waitlist disabled</Badge>}
+                            {bookingOpen && waitlistEnabled && waitlistIsFull && <Badge variant="destructive">Waitlist full</Badge>}
                         </div>
                         <h2 className="mt-3 truncate text-lg font-semibold">{schedule.route.name}</h2>
                     </div>
@@ -295,7 +306,13 @@ function ScheduleCard({
                     <div className="bg-muted/45 rounded-xl p-3">
                         <p className="text-muted-foreground text-xs">Capacity</p>
                         <p className="mt-1 font-semibold">{schedule.effective_capacity} seats</p>
-                        <p className="text-muted-foreground text-xs">{schedule.queue_size} in queue</p>
+                        <p className="text-muted-foreground text-xs">
+                            {schedule.queue_size}
+                            {schedule.waitlist_capacity !== null && schedule.waitlist_capacity !== undefined
+                                ? ` / ${schedule.waitlist_capacity}`
+                                : ''}{' '}
+                            in queue
+                        </p>
                     </div>
                 </div>
 
@@ -353,7 +370,7 @@ function ScheduleCard({
             <CardFooter className="bg-muted/15 flex flex-col items-stretch justify-between gap-3 border-t px-5 py-4 sm:flex-row sm:items-center sm:px-6">
                 <div className="text-muted-foreground flex items-center gap-2 text-xs">
                     <Armchair className="size-4" />
-                    Seats 1–{schedule.priority_seat_count} are priority-only
+                    {prioritySeats.length} configured priority seat{prioritySeats.length === 1 ? '' : 's'}
                 </div>
 
                 {schedule.reservation && bookingOpen ? (
@@ -376,6 +393,10 @@ function ScheduleCard({
                     />
                 ) : schedule.waitlist ? (
                     <span className="text-muted-foreground text-sm font-medium">Departure has closed</span>
+                ) : schedule.is_full_for_employee && bookingOpen && schedule.eligible_capacity > 0 && !waitlistEnabled ? (
+                    <span className="text-muted-foreground text-sm font-medium">Waitlist is disabled for this schedule</span>
+                ) : schedule.is_full_for_employee && bookingOpen && schedule.eligible_capacity > 0 && waitlistIsFull ? (
+                    <span className="text-muted-foreground text-sm font-medium">Waitlist is full</span>
                 ) : schedule.is_full_for_employee && bookingOpen && schedule.eligible_capacity > 0 ? (
                     <JoinWaitlistButton scheduleId={schedule.id} travelDate={selectedDate} />
                 ) : bookingOpen && schedule.eligible_capacity > 0 ? (
@@ -383,6 +404,8 @@ function ScheduleCard({
                         scheduleId={schedule.id}
                         travelDate={selectedDate}
                         capacity={schedule.effective_capacity}
+                        prioritySeats={prioritySeats}
+                        unavailableSeats={unavailableSeats}
                         prioritySeatCount={schedule.priority_seat_count}
                         occupiedSeats={schedule.occupied_seats}
                         priorityStatus={priorityStatus}
@@ -557,8 +580,8 @@ export default function EmployeeSchedules({ selectedDate, dates, schedules, oper
                     <UserRound />
                     <AlertTitle>How the queue works</AlertTitle>
                     <AlertDescription>
-                        The waitlist appears only when all seats you can use are occupied. Open seats are assigned to priority employees first, then
-                        to regular employees in first-come, first-served order.
+                        When enabled for a schedule, the waitlist appears only when all seats you can use are occupied. Open seats are assigned to
+                        priority employees first, then to regular employees in first-come, first-served order.
                     </AlertDescription>
                 </Alert>
             </div>

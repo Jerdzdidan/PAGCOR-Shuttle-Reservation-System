@@ -11,7 +11,9 @@ interface SeatSelectorProps {
     scheduleId: number;
     travelDate: string;
     capacity: number;
-    prioritySeatCount: number;
+    prioritySeats?: number[];
+    unavailableSeats?: number[];
+    prioritySeatCount?: number;
     occupiedSeats: number[];
     priorityStatus: 'REGULAR' | 'PRIORITY';
     routeName: string;
@@ -39,6 +41,8 @@ export function SeatSelector({
     scheduleId,
     travelDate,
     capacity,
+    prioritySeats,
+    unavailableSeats = [],
     prioritySeatCount,
     occupiedSeats,
     priorityStatus,
@@ -53,6 +57,11 @@ export function SeatSelector({
         seat_number: null,
     });
     const occupiedSeatNumbers = useMemo(() => new Set(occupiedSeats), [occupiedSeats]);
+    const prioritySeatNumbers = useMemo(
+        () => new Set(prioritySeats ?? Array.from({ length: prioritySeatCount ?? 0 }, (_, index) => index + 1)),
+        [prioritySeatCount, prioritySeats],
+    );
+    const unavailableSeatNumbers = useMemo(() => new Set(unavailableSeats), [unavailableSeats]);
     const rowCount = Math.ceil(capacity / 4);
     const rows = Array.from({ length: rowCount }, (_, index) => {
         const firstSeat = index * 4 + 1;
@@ -60,10 +69,10 @@ export function SeatSelector({
     });
 
     function selectSeat(seatNumber: number): void {
-        const isPrioritySeat = seatNumber <= prioritySeatCount;
+        const isPrioritySeat = prioritySeatNumbers.has(seatNumber);
         const isRestricted = isPrioritySeat && priorityStatus !== 'PRIORITY';
 
-        if (seatNumber > capacity || occupiedSeatNumbers.has(seatNumber) || isRestricted) {
+        if (seatNumber > capacity || unavailableSeatNumbers.has(seatNumber) || occupiedSeatNumbers.has(seatNumber) || isRestricted) {
             return;
         }
 
@@ -124,8 +133,10 @@ export function SeatSelector({
                     <div className="flex-1 space-y-5 px-5 py-6 sm:px-7">
                         <Alert className="border-blue-200 bg-blue-50 text-blue-950 dark:border-blue-900 dark:bg-blue-950/35 dark:text-blue-100">
                             <Info />
-                            <AlertTitle>Front seats are protected</AlertTitle>
-                            <AlertDescription>Seats 1–{prioritySeatCount} are reserved for employees with priority access.</AlertDescription>
+                            <AlertTitle>Configured priority seats are protected</AlertTitle>
+                            <AlertDescription>
+                                Seats marked Priority are reserved for employees with priority access. Unavailable seats cannot be selected.
+                            </AlertDescription>
                         </Alert>
 
                         <div className="flex flex-wrap gap-x-4 gap-y-2">
@@ -152,20 +163,23 @@ export function SeatSelector({
                                 {rows.map((row, rowIndex) => (
                                     <div key={rowIndex} className="grid grid-cols-[1fr_1fr_0.45fr_1fr_1fr] items-center gap-2">
                                         {row.map((seatNumber, seatIndex) => {
-                                            const isUnavailable = seatNumber > capacity;
+                                            const isOutsideCapacity = seatNumber > capacity;
+                                            const isUnavailable = unavailableSeatNumbers.has(seatNumber);
                                             const isOccupied = occupiedSeatNumbers.has(seatNumber);
-                                            const isPrioritySeat = seatNumber <= prioritySeatCount;
+                                            const isPrioritySeat = prioritySeatNumbers.has(seatNumber);
                                             const isRestricted = isPrioritySeat && priorityStatus !== 'PRIORITY';
                                             const isSelected = form.data.seat_number === seatNumber;
-                                            const isDisabled = isUnavailable || isOccupied || isRestricted;
+                                            const isDisabled = isOutsideCapacity || isUnavailable || isOccupied || isRestricted;
                                             const gridColumnClass = seatIndex === 2 ? 'col-start-4' : undefined;
-                                            const seatLabel = isUnavailable
-                                                ? 'Unavailable seat'
-                                                : isOccupied
-                                                  ? `Seat ${seatNumber}, occupied`
-                                                  : isRestricted
-                                                    ? `Seat ${seatNumber}, priority employees only`
-                                                    : `Seat ${seatNumber}, available`;
+                                            const seatLabel = isOutsideCapacity
+                                                ? 'No physical seat'
+                                                : isUnavailable
+                                                  ? `Seat ${seatNumber}, unavailable`
+                                                  : isOccupied
+                                                    ? `Seat ${seatNumber}, occupied`
+                                                    : isRestricted
+                                                      ? `Seat ${seatNumber}, priority employees only`
+                                                      : `Seat ${seatNumber}, available`;
 
                                             return (
                                                 <button
@@ -178,13 +192,14 @@ export function SeatSelector({
                                                     className={cn(
                                                         'focus-visible:ring-ring relative flex aspect-square min-h-13 items-center justify-center rounded-xl border text-sm font-bold shadow-xs transition-all focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden',
                                                         gridColumnClass,
-                                                        isUnavailable &&
+                                                        (isUnavailable || isOutsideCapacity) &&
                                                             'border-muted-foreground/35 text-muted-foreground cursor-not-allowed border-dashed bg-transparent opacity-40 shadow-none',
                                                         !isDisabled &&
                                                             !isSelected &&
                                                             'bg-background hover:border-primary hover:text-primary hover:-translate-y-0.5 hover:shadow-md',
                                                         isPrioritySeat &&
                                                             !isUnavailable &&
+                                                            !isOutsideCapacity &&
                                                             !isOccupied &&
                                                             !isSelected &&
                                                             'border-amber-300 bg-amber-100 text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100',
@@ -195,10 +210,10 @@ export function SeatSelector({
                                                             'border-primary bg-primary text-primary-foreground ring-primary/25 scale-105 shadow-lg ring-2',
                                                     )}
                                                 >
-                                                    {isPrioritySeat && !isUnavailable && (
+                                                    {isPrioritySeat && !isUnavailable && !isOutsideCapacity && (
                                                         <ShieldCheck className="absolute top-1 right-1 size-3 opacity-70" />
                                                     )}
-                                                    {isUnavailable ? '—' : seatNumber}
+                                                    {isOutsideCapacity ? '—' : seatNumber}
                                                 </button>
                                             );
                                         })}

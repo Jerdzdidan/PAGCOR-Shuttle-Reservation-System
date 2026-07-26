@@ -14,6 +14,8 @@ use Illuminate\Support\Collection;
 
 class EmployeeReservationData
 {
+    public function __construct(private ShuttleSeatPolicy $seatPolicy) {}
+
     /** @return array<string, mixed> */
     public function dashboard(Employee $employee): array
     {
@@ -143,17 +145,21 @@ class EmployeeReservationData
                     $scheduleReservations = $reservationsBySchedule->get($schedule->id, collect());
                     /** @var Collection<int, ShuttleWaitlistEntry> $scheduleWaitlist */
                     $scheduleWaitlist = $waitlistsBySchedule->get($schedule->id, collect());
-                    $capacity = $this->effectiveCapacity($schedule);
-                    $prioritySeatCount = $this->prioritySeatCount($capacity);
-                    $firstEligibleSeat = $employee->isPriority() ? 1 : $prioritySeatCount + 1;
-                    $eligibleCapacity = max(0, $capacity - $firstEligibleSeat + 1);
+                    $capacity = $this->seatPolicy->effectiveCapacity($schedule);
+                    $prioritySeats = $this->seatPolicy->effectivePrioritySeats($schedule);
+                    $unavailableSeats = $this->seatPolicy->effectiveUnavailableSeats($schedule);
+                    $eligibleSeats = $this->seatPolicy->eligibleSeats(
+                        $schedule,
+                        $employee->isPriority()
+                    );
+                    $eligibleCapacity = count($eligibleSeats);
                     $occupiedSeats = $scheduleReservations
                         ->pluck('seat_number')
                         ->map(fn (mixed $seat): int => (int) $seat)
                         ->sort()
                         ->values();
                     $occupiedEligibleSeats = $occupiedSeats
-                        ->filter(fn (int $seat): bool => $seat >= $firstEligibleSeat && $seat <= $capacity)
+                        ->filter(fn (int $seat): bool => in_array($seat, $eligibleSeats, true))
                         ->count();
                     $employeeReservation = $scheduleReservations
                         ->firstWhere('employee_id', $employee->getKey());
@@ -179,7 +185,9 @@ class EmployeeReservationData
                         'direction' => $schedule->direction,
                         'departure_time' => mb_substr((string) $schedule->departure_time, 0, 5),
                         'effective_capacity' => $capacity,
-                        'priority_seat_count' => $prioritySeatCount,
+                        'priority_seat_count' => count($prioritySeats),
+                        'priority_seats' => $prioritySeats,
+                        'unavailable_seats' => $unavailableSeats,
                         'occupied_seats' => $occupiedSeats->all(),
                         'available_eligible_seats' => max(0, $eligibleCapacity - $occupiedEligibleSeats),
                         'eligible_capacity' => $eligibleCapacity,
@@ -199,6 +207,8 @@ class EmployeeReservationData
                                 'tier' => $this->priorityTier($employee),
                             ],
                         'queue_size' => $scheduleWaitlist->count(),
+                        'waitlist_enabled' => (bool) $schedule->waitlist_enabled,
+                        'waitlist_capacity' => $schedule->waitlist_capacity,
                         'booking_open' => $departureAt->isFuture(),
                         'departure_at' => $departureAt->toIso8601String(),
                     ];
@@ -427,19 +437,6 @@ class EmployeeReservationData
             });
 
         return $metadata;
-    }
-
-    private function effectiveCapacity(ShuttleSchedule $schedule): int
-    {
-        return (int) ($schedule->capacity_override ?? $schedule->vehicle->capacity);
-    }
-
-    private function prioritySeatCount(int $capacity): int
-    {
-        return min(
-            $capacity,
-            max(0, (int) config('shuttle.priority_seat_count', 8))
-        );
     }
 
     private function priorityTier(Employee $employee): string

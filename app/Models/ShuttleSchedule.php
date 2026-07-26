@@ -2,20 +2,27 @@
 
 namespace App\Models;
 
+use Database\Factories\ShuttleScheduleFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Model;
 
 class ShuttleSchedule extends Model
 {
-    /** @use HasFactory<\Database\Factories\ShuttleScheduleFactory> */
+    /** @use HasFactory<ShuttleScheduleFactory> */
     use HasFactory;
 
     /** @var list<string> */
     protected $fillable = [
         'route_id', 'vehicle_id', 'driver_id', 'direction', 'departure_time', 'operating_days',
-        'effective_from', 'effective_until', 'capacity_override', 'status', 'notes',
+        'effective_from', 'effective_until', 'capacity_override', 'priority_seats',
+        'unavailable_seats', 'waitlist_enabled', 'waitlist_capacity', 'status', 'notes',
+    ];
+
+    /** @var array<string, mixed> */
+    protected $attributes = [
+        'waitlist_enabled' => true,
     ];
 
     /** @return array<string, string> */
@@ -26,6 +33,10 @@ class ShuttleSchedule extends Model
             'effective_from' => 'date:Y-m-d',
             'effective_until' => 'date:Y-m-d',
             'capacity_override' => 'integer',
+            'priority_seats' => 'array',
+            'unavailable_seats' => 'array',
+            'waitlist_enabled' => 'boolean',
+            'waitlist_capacity' => 'integer',
         ];
     }
 

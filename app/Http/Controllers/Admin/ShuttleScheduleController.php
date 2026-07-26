@@ -3,13 +3,18 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\BrowseAdminSchedulesRequest;
 use App\Http\Requests\StoreShuttleScheduleRequest;
 use App\Http\Requests\UpdateShuttleScheduleRequest;
 use App\Models\Driver;
 use App\Models\ShuttleRoute;
 use App\Models\ShuttleSchedule;
 use App\Models\Vehicle;
+use App\Services\AdminScheduleData;
+use App\Services\ShuttleSeatPolicy;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -18,14 +23,40 @@ class ShuttleScheduleController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(): Response
-    {
+    public function index(
+        BrowseAdminSchedulesRequest $request,
+        AdminScheduleData $scheduleData,
+        ShuttleSeatPolicy $seatPolicy,
+    ): Response {
+        $operatingTimezone = (string) config('shuttle.operating_timezone', 'Asia/Manila');
+        $selectedDate = CarbonImmutable::parse(
+            $request->validated('date')
+                ?? CarbonImmutable::now($operatingTimezone)->toDateString(),
+            $operatingTimezone
+        )->startOfDay();
+
         return Inertia::render('admin/schedules', [
-            'schedules' => ShuttleSchedule::query()->with(['route:id,name', 'vehicle:id,plate_number', 'driver:id,name'])->latest()->get(),
-            'routes' => ShuttleRoute::query()->orderBy('name')->get(['id', 'name', 'status']),
-            'vehicles' => Vehicle::query()->orderBy('plate_number')->get(['id', 'plate_number', 'capacity', 'status']),
-            'drivers' => Driver::query()->orderBy('name')->get(['id', 'name', 'employee_id', 'status']),
-            'operatingTimezone' => config('shuttle.operating_timezone'),
+            'schedules' => fn () => ShuttleSchedule::query()
+                ->with([
+                    'route:id,name,status',
+                    'vehicle:id,plate_number,capacity,status',
+                    'driver:id,name,employee_id,status',
+                ])
+                ->latest()
+                ->get(),
+            'scheduleOccurrences' => fn (): array => $scheduleData->occurrences($selectedDate),
+            'selectedDate' => $selectedDate->toDateString(),
+            'defaultPrioritySeatCount' => $seatPolicy->defaultPrioritySeatCount(),
+            'routes' => fn () => ShuttleRoute::query()
+                ->orderBy('name')
+                ->get(['id', 'name', 'status']),
+            'vehicles' => fn () => Vehicle::query()
+                ->orderBy('plate_number')
+                ->get(['id', 'plate_number', 'capacity', 'status']),
+            'drivers' => fn () => Driver::query()
+                ->orderBy('name')
+                ->get(['id', 'name', 'employee_id', 'status']),
+            'operatingTimezone' => $operatingTimezone,
         ]);
     }
 
@@ -78,6 +109,12 @@ class ShuttleScheduleController extends Controller
      */
     public function destroy(ShuttleSchedule $schedule): RedirectResponse
     {
+        if ($schedule->reservations()->exists() || $schedule->waitlistEntries()->exists()) {
+            throw ValidationException::withMessages([
+                'schedule' => 'This schedule cannot be deleted while reservations or waitlist entries exist.',
+            ]);
+        }
+
         $schedule->delete();
 
         return to_route('admin.schedules.index')->with('success', 'Schedule deleted successfully.');

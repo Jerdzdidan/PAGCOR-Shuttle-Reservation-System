@@ -168,7 +168,7 @@ export default function EmployeeDashboard({ upcomingReservations, waitlists, ope
                                     {employee.priority_status === 'PRIORITY' ? 'Priority access' : 'General access'}
                                 </p>
                                 <p className="text-muted-foreground text-xs">
-                                    {employee.priority_status === 'PRIORITY' ? 'Seats 1–8 enabled' : 'General seats enabled'}
+                                    {employee.priority_status === 'PRIORITY' ? 'Protected seats enabled' : 'General seats enabled'}
                                 </p>
                             </div>
                         </CardContent>
@@ -256,8 +256,8 @@ export default function EmployeeDashboard({ upcomingReservations, waitlists, ope
                         <ShieldCheck />
                         <AlertTitle>Priority access is active</AlertTitle>
                         <AlertDescription>
-                            You may select any available seat, including seats 1–8, and you receive priority placement when a full shuttle’s queue is
-                            promoted.
+                            You may select any available seat, including configured priority seats, and you receive priority placement when a full
+                            shuttle’s queue is promoted.
                         </AlertDescription>
                     </Alert>
                 )}

@@ -299,7 +299,8 @@ export default function EmployeesPage({ employees }: EmployeesPageProps) {
                                     </SelectContent>
                                 </Select>
                                 <p className="text-muted-foreground text-xs">
-                                    Priority persons may reserve seats 1–8 and move ahead of regular employees in a full-shuttle queue.
+                                    Priority persons may reserve configured priority seats and move ahead of regular employees in a full-shuttle
+                                    queue.
                                 </p>
                                 {form.errors.priority_status && <p className="text-destructive text-sm">{form.errors.priority_status}</p>}
                             </div>

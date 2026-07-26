@@ -16,6 +16,8 @@ use Throwable;
 
 class EmployeeReservationService
 {
+    public function __construct(private ShuttleSeatPolicy $seatPolicy) {}
+
     public function reserve(
         Employee $employee,
         int $scheduleId,
@@ -28,7 +30,7 @@ class EmployeeReservationService
 
             $this->assertEmployeeHasNoEntry($employee, $schedule, $date);
 
-            $capacity = $this->effectiveCapacity($schedule);
+            $capacity = $this->seatPolicy->effectiveCapacity($schedule);
 
             if ($seatNumber < 1 || $seatNumber > $capacity) {
                 throw ValidationException::withMessages([
@@ -36,9 +38,15 @@ class EmployeeReservationService
                 ]);
             }
 
-            if (! $employee->isPriority() && $seatNumber <= $this->prioritySeatCount($capacity)) {
+            if ($this->seatPolicy->isUnavailableSeat($schedule, $seatNumber)) {
                 throw ValidationException::withMessages([
-                    'seat_number' => 'Seats 1 through '.$this->prioritySeatCount($capacity).' are reserved for priority employees.',
+                    'seat_number' => 'The selected seat is unavailable for this schedule.',
+                ]);
+            }
+
+            if (! $employee->isPriority() && $this->seatPolicy->isPrioritySeat($schedule, $seatNumber)) {
+                throw ValidationException::withMessages([
+                    'seat_number' => 'The selected seat is reserved for priority employees.',
                 ]);
             }
 
@@ -77,30 +85,48 @@ class EmployeeReservationService
 
             $this->assertEmployeeHasNoEntry($employee, $schedule, $date);
 
-            $capacity = $this->effectiveCapacity($schedule);
-            $firstEligibleSeat = $employee->isPriority()
-                ? 1
-                : $this->prioritySeatCount($capacity) + 1;
-            $eligibleCapacity = max(0, $capacity - $firstEligibleSeat + 1);
-
-            if ($eligibleCapacity === 0) {
+            if (! $schedule->waitlist_enabled) {
                 throw ValidationException::withMessages([
-                    'schedule_id' => 'This shuttle has no general seats that can be assigned to regular employees.',
+                    'schedule_id' => 'The waitlist is disabled for this shuttle schedule.',
+                ]);
+            }
+
+            $eligibleSeats = $this->seatPolicy->eligibleSeats(
+                $schedule,
+                $employee->isPriority()
+            );
+
+            if ($eligibleSeats === []) {
+                throw ValidationException::withMessages([
+                    'schedule_id' => 'This shuttle has no seats that can be assigned to you.',
                 ]);
             }
 
             $occupiedEligibleSeats = ShuttleReservation::query()
                 ->where('shuttle_schedule_id', $schedule->id)
                 ->whereDate('travel_date', $date)
-                ->whereBetween('seat_number', [$firstEligibleSeat, $capacity])
+                ->whereIn('seat_number', $eligibleSeats)
                 ->lockForUpdate()
                 ->pluck('seat_number')
                 ->unique();
 
-            if ($occupiedEligibleSeats->count() < $eligibleCapacity) {
+            if ($occupiedEligibleSeats->count() < count($eligibleSeats)) {
                 throw ValidationException::withMessages([
                     'schedule_id' => 'An eligible seat is still available. Select a seat before joining the waitlist.',
                 ]);
+            }
+
+            if ($schedule->waitlist_capacity !== null) {
+                $waitlistCount = ShuttleWaitlistEntry::query()
+                    ->where('shuttle_schedule_id', $schedule->id)
+                    ->whereDate('travel_date', $date)
+                    ->count();
+
+                if ($waitlistCount >= $schedule->waitlist_capacity) {
+                    throw ValidationException::withMessages([
+                        'schedule_id' => 'The waitlist for this shuttle is already full.',
+                    ]);
+                }
             }
 
             return ShuttleWaitlistEntry::query()->create([
@@ -136,16 +162,14 @@ class EmployeeReservationService
             $releasedSeat = $lockedReservation->seat_number;
             $lockedReservation->delete();
 
-            $capacity = $this->effectiveCapacity($schedule);
-
-            if ($releasedSeat > $capacity) {
+            if (! in_array($releasedSeat, $this->seatPolicy->availableSeats($schedule), true)) {
                 return null;
             }
 
             $waitlistEntry = $this->nextWaitlistEntry(
                 $schedule,
                 $date,
-                $releasedSeat <= $this->prioritySeatCount($capacity),
+                $this->seatPolicy->isPrioritySeat($schedule, $releasedSeat),
             );
 
             if ($waitlistEntry === null) {
@@ -348,19 +372,6 @@ class EmployeeReservationService
             ->orderBy('queued_at')
             ->orderBy('id')
             ->lockForUpdate();
-    }
-
-    private function effectiveCapacity(ShuttleSchedule $schedule): int
-    {
-        return (int) ($schedule->capacity_override ?? $schedule->vehicle->capacity);
-    }
-
-    private function prioritySeatCount(int $capacity): int
-    {
-        return min(
-            $capacity,
-            max(0, (int) config('shuttle.priority_seat_count', 8))
-        );
     }
 
     private function departureAt(

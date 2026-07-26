@@ -11,6 +11,8 @@ use App\Models\Employee;
 use App\Models\ShuttleReservation;
 use App\Models\ShuttleWaitlistEntry;
 use App\Services\EmployeeQrCredential;
+use App\Services\ShuttleSeatPolicy;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -95,17 +97,43 @@ class EmployeeController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(UpdateEmployeeRequest $request, Employee $employee): RedirectResponse
-    {
+    public function update(
+        UpdateEmployeeRequest $request,
+        Employee $employee,
+        ShuttleSeatPolicy $seatPolicy,
+    ): RedirectResponse {
         $validated = $request->validated();
 
         if (
             $employee->isPriority()
             && $validated['priority_status'] === Employee::PRIORITY_STATUS_REGULAR
-            && $employee->shuttleReservations()
+            && ShuttleReservation::query()
+                ->with([
+                    'schedule:id,vehicle_id,departure_time,capacity_override,priority_seats',
+                    'schedule.vehicle:id,capacity',
+                ])
+                ->where('employee_id', $employee->employee_id)
                 ->whereDate('travel_date', '>=', today(config('shuttle.operating_timezone')))
-                ->where('seat_number', '<=', max(0, (int) config('shuttle.priority_seat_count', 8)))
-                ->exists()
+                ->get([
+                    'id',
+                    'employee_id',
+                    'shuttle_schedule_id',
+                    'travel_date',
+                    'seat_number',
+                ])
+                ->contains(function (ShuttleReservation $reservation) use ($seatPolicy): bool {
+                    $departureAt = CarbonImmutable::parse(
+                        $reservation->travel_date->toDateString()
+                            .' '.(string) $reservation->schedule->departure_time,
+                        (string) config('shuttle.operating_timezone', 'Asia/Manila')
+                    );
+
+                    return $departureAt->isFuture()
+                        && $seatPolicy->isPrioritySeat(
+                            $reservation->schedule,
+                            $reservation->seat_number
+                        );
+                })
         ) {
             throw ValidationException::withMessages([
                 'priority_status' => 'Cancel this employee’s protected-seat reservations before changing them to regular status.',
