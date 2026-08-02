@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
+import { Link } from '@inertiajs/react';
 import {
     Armchair,
     ArrowRight,
@@ -14,6 +15,7 @@ import {
     CircleGauge,
     Clock3,
     MapPin,
+    ScanLine,
     Settings2,
     ShieldCheck,
     UserRound,
@@ -28,6 +30,7 @@ type ActivityFilter = 'WITH_ACTIVITY' | 'ALL';
 
 interface OccurrenceEmployee {
     employee_id: number;
+    employee_code: string;
     name: string;
     department: string | null;
     priority_status: PriorityStatus;
@@ -35,6 +38,8 @@ interface OccurrenceEmployee {
 
 export interface ScheduleOccurrence {
     id: number;
+    occurrence_id: number | null;
+    lifecycle_state: 'SCHEDULED' | 'AWAITING_COMPLETION' | 'COMPLETED' | 'NOT_OPERATED' | null;
     direction: Direction;
     departure_time: string;
     departure_at: string;
@@ -69,6 +74,12 @@ export interface ScheduleOccurrence {
         employee: OccurrenceEmployee;
     }>;
     reserved_count: number;
+    attendance_totals: {
+        boarded: number;
+        no_show: number;
+        service_not_operated: number;
+        unmarked: number;
+    };
     available_count: number;
     queue_size: number;
     waitlist_enabled: boolean;
@@ -153,11 +164,11 @@ function statusBadgeClass(status: string): string {
         return 'border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300';
     }
 
-    if (status === 'BOOKING_CLOSED' || status === 'CLOSED') {
+    if (status === 'BOOKING_CLOSED' || status === 'CLOSED' || status === 'AWAITING_COMPLETION') {
         return 'border-amber-200 bg-amber-100 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200';
     }
 
-    if (status === 'CANCELLED' || status === 'INACTIVE' || status === 'UNAVAILABLE') {
+    if (status === 'CANCELLED' || status === 'INACTIVE' || status === 'UNAVAILABLE' || status === 'NOT_OPERATED') {
         return 'border-red-200 bg-red-100 text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200';
     }
 
@@ -286,7 +297,7 @@ function OccurrenceSeatMap({ occurrence }: { occurrence: ScheduleOccurrence }) {
                                     </Badge>
                                 </div>
                                 <p className="text-muted-foreground text-sm">
-                                    Employee #{selectedReservation.employee.employee_id}
+                                    Employee ID {selectedReservation.employee.employee_code}
                                     {selectedReservation.employee.department ? ` · ${selectedReservation.employee.department}` : ''}
                                 </p>
                                 <p className="text-muted-foreground text-xs">
@@ -331,7 +342,7 @@ function OccurrenceSeatMap({ occurrence }: { occurrence: ScheduleOccurrence }) {
                                             <span className="min-w-0 flex-1">
                                                 <span className="block truncate text-sm font-medium">{reservation.employee.name}</span>
                                                 <span className="text-muted-foreground block truncate text-xs">
-                                                    #{reservation.employee.employee_id}
+                                                    {reservation.employee.employee_code}
                                                     {reservation.employee.department ? ` · ${reservation.employee.department}` : ''}
                                                 </span>
                                             </span>
@@ -381,7 +392,26 @@ function OccurrenceDetail({
                 </SheetHeader>
 
                 <div className="flex-1 space-y-6 px-5 py-6 sm:px-7">
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    {occurrence.occurrence_id !== null &&
+                        occurrence.lifecycle_state !== 'COMPLETED' &&
+                        occurrence.lifecycle_state !== 'NOT_OPERATED' && (
+                            <div className="flex flex-col justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 sm:flex-row sm:items-center dark:border-blue-900 dark:bg-blue-950/35">
+                                <div>
+                                    <p className="font-semibold text-blue-950 dark:text-blue-100">Passenger boarding is open</p>
+                                    <p className="text-sm text-blue-800/75 dark:text-blue-200/70">
+                                        Scan reserved employees or update the manifest manually.
+                                    </p>
+                                </div>
+                                <Button asChild>
+                                    <Link href={`/admin/finished-services?occurrence=${occurrence.occurrence_id}`}>
+                                        <ScanLine />
+                                        Board passengers
+                                    </Link>
+                                </Button>
+                            </div>
+                        )}
+
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                         <div className="bg-muted/35 rounded-xl border p-4">
                             <p className="text-muted-foreground text-xs">Usable seats</p>
                             <p className="mt-1 text-xl font-semibold">{occurrence.usable_seat_count}</p>
@@ -397,6 +427,10 @@ function OccurrenceDetail({
                         <div className="bg-muted/35 rounded-xl border p-4">
                             <p className="text-muted-foreground text-xs">Waitlist</p>
                             <p className="mt-1 text-xl font-semibold">{occurrence.queue_size}</p>
+                        </div>
+                        <div className="bg-muted/35 rounded-xl border p-4">
+                            <p className="text-muted-foreground text-xs">Boarded</p>
+                            <p className="mt-1 text-xl font-semibold">{occurrence.attendance_totals.boarded}</p>
                         </div>
                     </div>
 
@@ -441,7 +475,7 @@ function OccurrenceDetail({
                                                 <span className="min-w-0 flex-1">
                                                     <span className="block truncate text-sm font-medium">{entry.employee.name}</span>
                                                     <span className="text-muted-foreground block truncate text-xs">
-                                                        #{entry.employee.employee_id}
+                                                        {entry.employee.employee_code}
                                                         {entry.employee.department ? ` · ${entry.employee.department}` : ''}
                                                     </span>
                                                 </span>

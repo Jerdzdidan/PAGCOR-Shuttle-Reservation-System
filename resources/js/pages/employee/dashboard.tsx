@@ -23,6 +23,7 @@ type Direction = 'OUTBOUND' | 'RETURN';
 
 interface EmployeeIdentity {
     employee_id: number;
+    employee_code: string;
     name: string;
     email: string;
     department: string | null;

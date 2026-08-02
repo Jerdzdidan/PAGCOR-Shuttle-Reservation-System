@@ -70,8 +70,11 @@ class DriverController extends Controller
      */
     public function destroy(Driver $driver): RedirectResponse
     {
-        if ($driver->schedules()->exists()) {
-            throw ValidationException::withMessages(['driver' => 'This driver cannot be deleted because it is referenced by a schedule.']);
+        if (
+            $driver->schedules()->exists()
+            || $driver->serviceOccurrences()->exists()
+        ) {
+            throw ValidationException::withMessages(['driver' => 'This driver cannot be deleted because it is referenced by a schedule or retained service history.']);
         }
 
         $driver->delete();

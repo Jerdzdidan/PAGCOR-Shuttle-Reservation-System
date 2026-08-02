@@ -3,21 +3,32 @@
 namespace App\Services;
 
 use App\Models\ShuttleSchedule;
+use App\Models\ShuttleServiceOccurrence;
 
 class ShuttleSeatPolicy
 {
-    public function effectiveCapacity(ShuttleSchedule $schedule): int
-    {
-        return max(0, (int) ($schedule->capacity_override ?? $schedule->vehicle->capacity));
+    public function effectiveCapacity(
+        ShuttleSchedule|ShuttleServiceOccurrence $service,
+    ): int {
+        if ($service instanceof ShuttleServiceOccurrence) {
+            return max(0, (int) $service->effective_capacity);
+        }
+
+        return max(0, (int) ($service->capacity_override ?? $service->vehicle->capacity));
     }
 
     /** @return list<int> */
-    public function effectivePrioritySeats(ShuttleSchedule $schedule): array
-    {
-        $capacity = $this->effectiveCapacity($schedule);
-        $configuredSeats = $schedule->priority_seats;
+    public function effectivePrioritySeats(
+        ShuttleSchedule|ShuttleServiceOccurrence $service,
+    ): array {
+        $capacity = $this->effectiveCapacity($service);
+        $configuredSeats = $service->priority_seats;
 
         if ($configuredSeats === null) {
+            if ($service instanceof ShuttleServiceOccurrence) {
+                return [];
+            }
+
             return $this->defaultPrioritySeats($capacity);
         }
 
@@ -25,30 +36,34 @@ class ShuttleSeatPolicy
     }
 
     /** @return list<int> */
-    public function effectiveUnavailableSeats(ShuttleSchedule $schedule): array
-    {
+    public function effectiveUnavailableSeats(
+        ShuttleSchedule|ShuttleServiceOccurrence $service,
+    ): array {
         return $this->normalizeSeats(
-            $schedule->unavailable_seats ?? [],
-            $this->effectiveCapacity($schedule)
+            $service->unavailable_seats ?? [],
+            $this->effectiveCapacity($service)
         );
     }
 
     /** @return list<int> */
-    public function availableSeats(ShuttleSchedule $schedule): array
-    {
-        $capacity = $this->effectiveCapacity($schedule);
+    public function availableSeats(
+        ShuttleSchedule|ShuttleServiceOccurrence $service,
+    ): array {
+        $capacity = $this->effectiveCapacity($service);
         $allSeats = $capacity > 0 ? range(1, $capacity) : [];
 
         return array_values(array_diff(
             $allSeats,
-            $this->effectiveUnavailableSeats($schedule)
+            $this->effectiveUnavailableSeats($service)
         ));
     }
 
     /** @return list<int> */
-    public function eligibleSeats(ShuttleSchedule $schedule, bool $isPriorityEmployee): array
-    {
-        $availableSeats = $this->availableSeats($schedule);
+    public function eligibleSeats(
+        ShuttleSchedule|ShuttleServiceOccurrence $service,
+        bool $isPriorityEmployee,
+    ): array {
+        $availableSeats = $this->availableSeats($service);
 
         if ($isPriorityEmployee) {
             return $availableSeats;
@@ -56,18 +71,22 @@ class ShuttleSeatPolicy
 
         return array_values(array_diff(
             $availableSeats,
-            $this->effectivePrioritySeats($schedule)
+            $this->effectivePrioritySeats($service)
         ));
     }
 
-    public function isPrioritySeat(ShuttleSchedule $schedule, int $seatNumber): bool
-    {
-        return in_array($seatNumber, $this->effectivePrioritySeats($schedule), true);
+    public function isPrioritySeat(
+        ShuttleSchedule|ShuttleServiceOccurrence $service,
+        int $seatNumber,
+    ): bool {
+        return in_array($seatNumber, $this->effectivePrioritySeats($service), true);
     }
 
-    public function isUnavailableSeat(ShuttleSchedule $schedule, int $seatNumber): bool
-    {
-        return in_array($seatNumber, $this->effectiveUnavailableSeats($schedule), true);
+    public function isUnavailableSeat(
+        ShuttleSchedule|ShuttleServiceOccurrence $service,
+        int $seatNumber,
+    ): bool {
+        return in_array($seatNumber, $this->effectiveUnavailableSeats($service), true);
     }
 
     public function defaultPrioritySeatCount(): int

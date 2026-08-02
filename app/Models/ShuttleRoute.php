@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use Database\Factories\ShuttleRouteFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ShuttleRoute extends Model
 {
-    /** @use HasFactory<\Database\Factories\ShuttleRouteFactory> */
+    /** @use HasFactory<ShuttleRouteFactory> */
     use HasFactory;
 
     /** @var list<string> */
@@ -18,5 +19,11 @@ class ShuttleRoute extends Model
     public function schedules(): HasMany
     {
         return $this->hasMany(ShuttleSchedule::class, 'route_id');
+    }
+
+    /** @return HasMany<ShuttleServiceOccurrence, $this> */
+    public function serviceOccurrences(): HasMany
+    {
+        return $this->hasMany(ShuttleServiceOccurrence::class, 'route_id');
     }
 }

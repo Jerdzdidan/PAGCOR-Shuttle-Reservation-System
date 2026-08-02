@@ -24,6 +24,18 @@ class UpdateVehicleRequest extends FormRequest
      */
     public function rules(): array
     {
-        return ['plate_number' => ['required', 'string', 'max:30', Rule::unique(Vehicle::class)->ignore($this->route('vehicle'))], 'vehicle_type' => ['required', 'string', 'max:100'], 'capacity' => ['required', 'integer', 'min:1', 'max:1000'], 'status' => ['required', 'in:ACTIVE,MAINTENANCE,INACTIVE'], 'notes' => ['nullable', 'string', 'max:2000']];
+        return [
+            'plate_number' => [
+                'required',
+                'string',
+                'max:30',
+                Rule::unique(Vehicle::class)->ignore($this->route('vehicle')),
+            ],
+            'vehicle_type' => ['required', 'string', 'max:100'],
+            'capacity' => ['required', 'integer', 'min:1', 'max:1000'],
+            'current_odometer_km' => ['nullable', 'numeric', 'decimal:0,1', 'min:0', 'max:99999999999.9'],
+            'status' => ['required', 'in:ACTIVE,MAINTENANCE,INACTIVE'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+        ];
     }
 }

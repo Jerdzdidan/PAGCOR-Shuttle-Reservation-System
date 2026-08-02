@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ShuttleReservation extends Model
 {
@@ -36,6 +37,12 @@ class ShuttleReservation extends Model
     public function schedule(): BelongsTo
     {
         return $this->belongsTo(ShuttleSchedule::class, 'shuttle_schedule_id');
+    }
+
+    /** @return HasOne<ShuttleServiceAttendance, $this> */
+    public function attendance(): HasOne
+    {
+        return $this->hasOne(ShuttleServiceAttendance::class);
     }
 
     /** @return array<string, string> */

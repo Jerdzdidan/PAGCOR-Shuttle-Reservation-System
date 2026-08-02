@@ -2,11 +2,13 @@
 
 namespace App\Services;
 
+use App\Enums\ServiceOccurrenceStatus;
 use App\Models\Driver;
 use App\Models\Employee;
 use App\Models\ShuttleReservation;
 use App\Models\ShuttleRoute;
 use App\Models\ShuttleSchedule;
+use App\Models\ShuttleServiceOccurrence;
 use App\Models\ShuttleWaitlistEntry;
 use App\Models\Vehicle;
 use Carbon\CarbonImmutable;
@@ -45,61 +47,93 @@ class EmployeeReservationData
             $this->operatingTimezone()
         )->startOfDay();
         $operatingDay = mb_strtolower($selectedDate->format('l'));
+        $now = CarbonImmutable::now($this->operatingTimezone());
+        $scheduleRelations = [
+            'route:id,name,origin,destination,status',
+            'vehicle:id,plate_number,vehicle_type,capacity,status',
+            'driver:id,name,status',
+        ];
+        $serviceOccurrencesBySchedule = collect();
 
-        $schedules = ShuttleSchedule::query()
-            ->with([
-                'route:id,name,origin,destination,status',
-                'vehicle:id,plate_number,vehicle_type,capacity,status',
-                'driver:id,name,status',
-            ])
-            ->where('status', 'ACTIVE')
-            ->whereIn(
-                'route_id',
-                ShuttleRoute::query()->select('id')->where('status', 'ACTIVE')
-            )
-            ->whereIn(
-                'vehicle_id',
-                Vehicle::query()->select('id')->where('status', 'ACTIVE')
-            )
-            ->whereIn(
-                'driver_id',
-                Driver::query()->select('id')->where('status', 'ACTIVE')
-            )
-            ->whereDate('effective_from', '<=', $selectedDate)
-            ->where(function ($query) use ($selectedDate): void {
-                $query
-                    ->whereNull('effective_until')
-                    ->orWhereDate('effective_until', '>=', $selectedDate);
-            })
-            ->whereJsonContains('operating_days', $operatingDay)
-            ->when(
-                isset($filters['route_id']),
-                fn ($query) => $query->where('route_id', $filters['route_id'])
-            )
-            ->when(
-                isset($filters['direction']),
-                fn ($query) => $query->where('direction', $filters['direction'])
-            )
-            ->when(
-                $selectedDate->equalTo($today),
-                fn ($query) => $query->whereTime(
-                    'departure_time',
-                    '>',
-                    CarbonImmutable::now($this->operatingTimezone())->format('H:i:s')
+        if ($selectedDate->equalTo($today)) {
+            $serviceOccurrencesBySchedule = ShuttleServiceOccurrence::query()
+                ->whereDate('travel_date', $selectedDate)
+                ->whereNotNull('shuttle_schedule_id')
+                ->where('status', ServiceOccurrenceStatus::Scheduled)
+                ->where('scheduled_departure_at', '>', $now)
+                ->when(
+                    isset($filters['route_id']),
+                    fn ($query) => $query->where('route_id', $filters['route_id'])
                 )
-            )
-            ->orderBy('departure_time')
-            ->orderBy('id')
-            ->get();
+                ->when(
+                    isset($filters['direction']),
+                    fn ($query) => $query->where('direction', $filters['direction'])
+                )
+                ->orderBy('scheduled_departure_at')
+                ->orderBy('id')
+                ->get()
+                ->keyBy('shuttle_schedule_id');
 
-        $scheduleIds = $schedules->modelKeys();
+            $schedules = $serviceOccurrencesBySchedule->isEmpty()
+                ? collect()
+                : ShuttleSchedule::query()
+                    ->with($scheduleRelations)
+                    ->whereIn('id', $serviceOccurrencesBySchedule->keys())
+                    ->get()
+                    ->sortBy(
+                        fn (ShuttleSchedule $schedule): int => $serviceOccurrencesBySchedule
+                            ->get($schedule->getKey())
+                            ->scheduled_departure_at
+                            ->getTimestamp()
+                    )
+                    ->values();
+        } else {
+            $schedules = ShuttleSchedule::query()
+                ->with($scheduleRelations)
+                ->where('status', 'ACTIVE')
+                ->whereIn(
+                    'route_id',
+                    ShuttleRoute::query()->select('id')->where('status', 'ACTIVE')
+                )
+                ->whereIn(
+                    'vehicle_id',
+                    Vehicle::query()->select('id')->where('status', 'ACTIVE')
+                )
+                ->whereIn(
+                    'driver_id',
+                    Driver::query()->select('id')->where('status', 'ACTIVE')
+                )
+                ->whereDate('effective_from', '<=', $selectedDate)
+                ->where(function ($query) use ($selectedDate): void {
+                    $query
+                        ->whereNull('effective_until')
+                        ->orWhereDate('effective_until', '>=', $selectedDate);
+                })
+                ->whereJsonContains('operating_days', $operatingDay)
+                ->when(
+                    isset($filters['route_id']),
+                    fn ($query) => $query->where('route_id', $filters['route_id'])
+                )
+                ->when(
+                    isset($filters['direction']),
+                    fn ($query) => $query->where('direction', $filters['direction'])
+                )
+                ->orderBy('departure_time')
+                ->orderBy('id')
+                ->get();
+        }
+
+        $scheduleIds = $schedules->pluck('id')->all();
         $openScheduleIds = $schedules
             ->filter(
-                fn (ShuttleSchedule $schedule): bool => $this
-                    ->departureAt($schedule, $selectedDate)
-                    ->isFuture()
+                fn (ShuttleSchedule $schedule): bool => $this->bookingOpen(
+                    $schedule,
+                    $selectedDate,
+                    $serviceOccurrencesBySchedule->get($schedule->getKey()),
+                )
             )
-            ->modelKeys();
+            ->pluck('id')
+            ->all();
         $reservations = $scheduleIds === []
             ? collect()
             : ShuttleReservation::query()
@@ -139,17 +173,21 @@ class EmployeeReservationData
                     $selectedDate,
                     $reservationsBySchedule,
                     $waitlistsBySchedule,
-                    $waitlistMetadata
+                    $waitlistMetadata,
+                    $serviceOccurrencesBySchedule,
                 ): array {
                     /** @var Collection<int, ShuttleReservation> $scheduleReservations */
                     $scheduleReservations = $reservationsBySchedule->get($schedule->id, collect());
                     /** @var Collection<int, ShuttleWaitlistEntry> $scheduleWaitlist */
                     $scheduleWaitlist = $waitlistsBySchedule->get($schedule->id, collect());
-                    $capacity = $this->seatPolicy->effectiveCapacity($schedule);
-                    $prioritySeats = $this->seatPolicy->effectivePrioritySeats($schedule);
-                    $unavailableSeats = $this->seatPolicy->effectiveUnavailableSeats($schedule);
+                    /** @var ShuttleServiceOccurrence|null $serviceOccurrence */
+                    $serviceOccurrence = $serviceOccurrencesBySchedule->get($schedule->id);
+                    $seatConfiguration = $serviceOccurrence ?? $schedule;
+                    $capacity = $this->seatPolicy->effectiveCapacity($seatConfiguration);
+                    $prioritySeats = $this->seatPolicy->effectivePrioritySeats($seatConfiguration);
+                    $unavailableSeats = $this->seatPolicy->effectiveUnavailableSeats($seatConfiguration);
                     $eligibleSeats = $this->seatPolicy->eligibleSeats(
-                        $schedule,
+                        $seatConfiguration,
                         $employee->isPriority()
                     );
                     $eligibleCapacity = count($eligibleSeats);
@@ -165,25 +203,37 @@ class EmployeeReservationData
                         ->firstWhere('employee_id', $employee->getKey());
                     $employeeWaitlist = $scheduleWaitlist
                         ->firstWhere('employee_id', $employee->getKey());
-                    $departureAt = $this->departureAt($schedule, $selectedDate);
+                    $departureAt = $this->departureAt(
+                        $schedule,
+                        $selectedDate,
+                        $serviceOccurrence,
+                    );
 
                     return [
                         'id' => $schedule->id,
+                        'occurrence_id' => $serviceOccurrence?->getKey(),
                         'route' => [
-                            'name' => $schedule->route->name,
-                            'origin' => $schedule->route->origin,
-                            'destination' => $schedule->route->destination,
+                            'name' => $serviceOccurrence?->route_name ?? $schedule->route->name,
+                            'origin' => $serviceOccurrence?->origin ?? $schedule->route->origin,
+                            'destination' => $serviceOccurrence?->destination ?? $schedule->route->destination,
                         ],
                         'vehicle' => [
-                            'plate_number' => $schedule->vehicle->plate_number,
-                            'vehicle_type' => $schedule->vehicle->vehicle_type,
-                            'capacity' => (int) $schedule->vehicle->capacity,
+                            'plate_number' => $serviceOccurrence?->plate_number
+                                ?? $schedule->vehicle->plate_number,
+                            'vehicle_type' => $serviceOccurrence?->vehicle_type
+                                ?? $schedule->vehicle->vehicle_type,
+                            'capacity' => $serviceOccurrence?->effective_capacity
+                                ?? (int) $schedule->vehicle->capacity,
                         ],
                         'driver' => [
-                            'name' => $schedule->driver->name,
+                            'name' => $serviceOccurrence?->driver_name ?? $schedule->driver->name,
                         ],
-                        'direction' => $schedule->direction,
-                        'departure_time' => mb_substr((string) $schedule->departure_time, 0, 5),
+                        'direction' => $serviceOccurrence?->direction ?? $schedule->direction,
+                        'departure_time' => mb_substr(
+                            (string) ($serviceOccurrence?->departure_time ?? $schedule->departure_time),
+                            0,
+                            5,
+                        ),
                         'effective_capacity' => $capacity,
                         'priority_seat_count' => count($prioritySeats),
                         'priority_seats' => $prioritySeats,
@@ -207,9 +257,17 @@ class EmployeeReservationData
                                 'tier' => $this->priorityTier($employee),
                             ],
                         'queue_size' => $scheduleWaitlist->count(),
-                        'waitlist_enabled' => (bool) $schedule->waitlist_enabled,
-                        'waitlist_capacity' => $schedule->waitlist_capacity,
-                        'booking_open' => $departureAt->isFuture(),
+                        'waitlist_enabled' => (bool) (
+                            $serviceOccurrence?->waitlist_enabled ?? $schedule->waitlist_enabled
+                        ),
+                        'waitlist_capacity' => $serviceOccurrence !== null
+                            ? $serviceOccurrence->waitlist_capacity
+                            : $schedule->waitlist_capacity,
+                        'booking_open' => $this->bookingOpen(
+                            $schedule,
+                            $selectedDate,
+                            $serviceOccurrence,
+                        ),
                         'departure_at' => $departureAt->toIso8601String(),
                     ];
                 })
@@ -259,26 +317,15 @@ class EmployeeReservationData
             'schedule.vehicle:id,plate_number',
         ];
 
-        $reservations = ShuttleReservation::query()
+        $reservationCandidates = ShuttleReservation::query()
             ->with($scheduleRelations)
             ->where('employee_id', $employee->getKey())
             ->whereBetween('travel_date', [$today->toDateString(), $lastBookingDate->toDateString()])
             ->orderBy('travel_date')
             ->orderBy('id')
-            ->get()
-            ->filter(
-                fn (ShuttleReservation $reservation): bool => $this
-                    ->departureAt($reservation->schedule, $reservation->travel_date->toImmutable())
-                    ->gt($now)
-            )
-            ->sortBy(
-                fn (ShuttleReservation $reservation): int => $this
-                    ->departureAt($reservation->schedule, $reservation->travel_date->toImmutable())
-                    ->getTimestamp()
-            )
-            ->values();
+            ->get();
 
-        $employeeWaitlistEntries = ShuttleWaitlistEntry::query()
+        $waitlistCandidates = ShuttleWaitlistEntry::query()
             ->with([
                 ...$scheduleRelations,
                 'employee:employee_id,priority_status',
@@ -287,10 +334,70 @@ class EmployeeReservationData
             ->whereBetween('travel_date', [$today->toDateString(), $lastBookingDate->toDateString()])
             ->orderBy('queued_at')
             ->orderBy('id')
-            ->get()
+            ->get();
+        $entryScheduleIds = $reservationCandidates
+            ->pluck('shuttle_schedule_id')
+            ->merge($waitlistCandidates->pluck('shuttle_schedule_id'))
+            ->unique()
+            ->values();
+        $serviceOccurrencesByKey = $entryScheduleIds->isEmpty()
+            ? collect()
+            : ShuttleServiceOccurrence::query()
+                ->whereIn('shuttle_schedule_id', $entryScheduleIds)
+                ->whereBetween('travel_date', [
+                    $today->toDateString(),
+                    $lastBookingDate->toDateString(),
+                ])
+                ->get()
+                ->keyBy(
+                    fn (ShuttleServiceOccurrence $occurrence): string => $this
+                        ->occurrenceKey(
+                            (int) $occurrence->shuttle_schedule_id,
+                            $occurrence->travel_date->toImmutable(),
+                        )
+                );
+
+        $reservations = $reservationCandidates
             ->filter(
-                fn (ShuttleWaitlistEntry $entry): bool => $this
-                    ->departureAt($entry->schedule, $entry->travel_date->toImmutable())
+                fn (ShuttleReservation $reservation): bool => $this->departureAt(
+                    $reservation->schedule,
+                    $reservation->travel_date->toImmutable(),
+                    $serviceOccurrencesByKey->get(
+                        $this->occurrenceKey(
+                            (int) $reservation->shuttle_schedule_id,
+                            $reservation->travel_date->toImmutable(),
+                        )
+                    ),
+                )
+                    ->gt($now)
+            )
+            ->sortBy(
+                fn (ShuttleReservation $reservation): int => $this->departureAt(
+                    $reservation->schedule,
+                    $reservation->travel_date->toImmutable(),
+                    $serviceOccurrencesByKey->get(
+                        $this->occurrenceKey(
+                            (int) $reservation->shuttle_schedule_id,
+                            $reservation->travel_date->toImmutable(),
+                        )
+                    ),
+                )
+                    ->getTimestamp()
+            )
+            ->values();
+
+        $employeeWaitlistEntries = $waitlistCandidates
+            ->filter(
+                fn (ShuttleWaitlistEntry $entry): bool => $this->departureAt(
+                    $entry->schedule,
+                    $entry->travel_date->toImmutable(),
+                    $serviceOccurrencesByKey->get(
+                        $this->occurrenceKey(
+                            (int) $entry->shuttle_schedule_id,
+                            $entry->travel_date->toImmutable(),
+                        )
+                    ),
+                )
                     ->gt($now)
             )
             ->values();
@@ -323,33 +430,68 @@ class EmployeeReservationData
         $waitlistMetadata = $this->waitlistMetadata($occurrenceWaitlistEntries);
         $employeeWaitlistEntries = $employeeWaitlistEntries
             ->sortBy(
-                fn (ShuttleWaitlistEntry $entry): int => $this
-                    ->departureAt($entry->schedule, $entry->travel_date->toImmutable())
+                fn (ShuttleWaitlistEntry $entry): int => $this->departureAt(
+                    $entry->schedule,
+                    $entry->travel_date->toImmutable(),
+                    $serviceOccurrencesByKey->get(
+                        $this->occurrenceKey(
+                            (int) $entry->shuttle_schedule_id,
+                            $entry->travel_date->toImmutable(),
+                        )
+                    ),
+                )
                     ->getTimestamp()
             )
             ->values();
 
         return [
             'reservations' => $reservations
-                ->map(fn (ShuttleReservation $reservation): array => $this->reservationItem($reservation))
+                ->map(
+                    fn (ShuttleReservation $reservation): array => $this->reservationItem(
+                        $reservation,
+                        $serviceOccurrencesByKey->get(
+                            $this->occurrenceKey(
+                                (int) $reservation->shuttle_schedule_id,
+                                $reservation->travel_date->toImmutable(),
+                            )
+                        ),
+                    )
+                )
                 ->all(),
             'waitlists' => $employeeWaitlistEntries
-                ->map(function (ShuttleWaitlistEntry $entry) use ($waitlistMetadata): array {
-                    return $this->waitlistItem($entry, $waitlistMetadata[$entry->id]);
+                ->map(function (ShuttleWaitlistEntry $entry) use (
+                    $waitlistMetadata,
+                    $serviceOccurrencesByKey,
+                ): array {
+                    return $this->waitlistItem(
+                        $entry,
+                        $waitlistMetadata[$entry->id],
+                        $serviceOccurrencesByKey->get(
+                            $this->occurrenceKey(
+                                (int) $entry->shuttle_schedule_id,
+                                $entry->travel_date->toImmutable(),
+                            )
+                        ),
+                    );
                 })
                 ->all(),
         ];
     }
 
     /** @return array<string, mixed> */
-    private function reservationItem(ShuttleReservation $reservation): array
-    {
+    private function reservationItem(
+        ShuttleReservation $reservation,
+        ?ShuttleServiceOccurrence $occurrence,
+    ): array {
         return [
             'id' => $reservation->id,
             'travel_date' => $reservation->travel_date->toDateString(),
             'seat_number' => $reservation->seat_number,
             'source' => $reservation->source,
-            'schedule' => $this->scheduleOccurrenceItem($reservation->schedule),
+            'schedule' => $this->scheduleOccurrenceItem(
+                $reservation->schedule,
+                $occurrence,
+            ),
         ];
     }
 
@@ -360,6 +502,7 @@ class EmployeeReservationData
     private function waitlistItem(
         ShuttleWaitlistEntry $entry,
         array $metadata,
+        ?ShuttleServiceOccurrence $occurrence,
     ): array {
         return [
             'id' => $entry->id,
@@ -367,24 +510,32 @@ class EmployeeReservationData
             'position' => $metadata['position'],
             'tier' => $this->priorityTier($entry->employee),
             'queue_size' => $metadata['queue_size'],
-            'schedule' => $this->scheduleOccurrenceItem($entry->schedule),
+            'schedule' => $this->scheduleOccurrenceItem($entry->schedule, $occurrence),
         ];
     }
 
     /** @return array<string, mixed> */
-    private function scheduleOccurrenceItem(ShuttleSchedule $schedule): array
-    {
+    private function scheduleOccurrenceItem(
+        ShuttleSchedule $schedule,
+        ?ShuttleServiceOccurrence $occurrence,
+    ): array {
         return [
             'id' => $schedule->id,
-            'direction' => $schedule->direction,
-            'departure_time' => mb_substr((string) $schedule->departure_time, 0, 5),
+            'occurrence_id' => $occurrence?->getKey(),
+            'direction' => $occurrence?->direction ?? $schedule->direction,
+            'departure_time' => mb_substr(
+                (string) ($occurrence?->departure_time ?? $schedule->departure_time),
+                0,
+                5,
+            ),
             'route' => [
-                'name' => $schedule->route->name,
-                'origin' => $schedule->route->origin,
-                'destination' => $schedule->route->destination,
+                'name' => $occurrence?->route_name ?? $schedule->route->name,
+                'origin' => $occurrence?->origin ?? $schedule->route->origin,
+                'destination' => $occurrence?->destination ?? $schedule->route->destination,
             ],
             'vehicle' => [
-                'plate_number' => $schedule->vehicle->plate_number,
+                'plate_number' => $occurrence?->plate_number
+                    ?? $schedule->vehicle->plate_number,
             ],
         ];
     }
@@ -449,11 +600,38 @@ class EmployeeReservationData
     private function departureAt(
         ShuttleSchedule $schedule,
         CarbonImmutable $date,
+        ?ShuttleServiceOccurrence $occurrence = null,
     ): CarbonImmutable {
+        if ($occurrence !== null) {
+            return $occurrence->scheduled_departure_at->toImmutable();
+        }
+
         return CarbonImmutable::parse(
             $date->toDateString().' '.(string) $schedule->departure_time,
             $this->operatingTimezone()
         );
+    }
+
+    private function bookingOpen(
+        ShuttleSchedule $schedule,
+        CarbonImmutable $date,
+        ?ShuttleServiceOccurrence $occurrence,
+    ): bool {
+        if (
+            $occurrence !== null
+            && $occurrence->status !== ServiceOccurrenceStatus::Scheduled
+        ) {
+            return false;
+        }
+
+        return $this->departureAt($schedule, $date, $occurrence)->isFuture();
+    }
+
+    private function occurrenceKey(
+        int $scheduleId,
+        CarbonImmutable $date,
+    ): string {
+        return $scheduleId.'|'.$date->toDateString();
     }
 
     private function operatingTimezone(): string

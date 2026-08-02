@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use Database\Factories\DriverFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Driver extends Model
 {
-    /** @use HasFactory<\Database\Factories\DriverFactory> */
+    /** @use HasFactory<DriverFactory> */
     use HasFactory;
 
     /** @var list<string> */
@@ -18,6 +19,12 @@ class Driver extends Model
     public function schedules(): HasMany
     {
         return $this->hasMany(ShuttleSchedule::class);
+    }
+
+    /** @return HasMany<ShuttleServiceOccurrence, $this> */
+    public function serviceOccurrences(): HasMany
+    {
+        return $this->hasMany(ShuttleServiceOccurrence::class);
     }
 
     /** @return array<string, string> */

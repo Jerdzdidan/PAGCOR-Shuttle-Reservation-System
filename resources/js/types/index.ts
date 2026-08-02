@@ -7,12 +7,14 @@ export interface Auth {
 
 export interface AuthenticatedEmployee {
     employee_id: number;
+    employee_code: string;
     name: string;
     email: string;
     contact_number: string | null;
     department: string | null;
     position: string | null;
     priority_status: 'REGULAR' | 'PRIORITY';
+    status: 'ACTIVE' | 'INACTIVE';
 }
 
 export interface BreadcrumbItem {
@@ -30,13 +32,15 @@ export interface NavItem {
     url: string;
     icon?: LucideIcon | null;
     isActive?: boolean;
+    badge?: number | string | null;
 }
 
 export interface SharedData {
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
-    flash?: { success?: string };
+    flash?: { success?: string; error?: string };
+    pending_completion_count?: number;
     [key: string]: unknown;
 }
 

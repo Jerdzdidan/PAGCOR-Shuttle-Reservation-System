@@ -69,4 +69,16 @@ class ShuttleSchedule extends Model
     {
         return $this->hasMany(ShuttleWaitlistEntry::class);
     }
+
+    /** @return HasMany<ShuttleServiceOccurrence, $this> */
+    public function serviceOccurrences(): HasMany
+    {
+        return $this->hasMany(ShuttleServiceOccurrence::class);
+    }
+
+    /** @return HasMany<ShuttleActivityEvent, $this> */
+    public function activityEvents(): HasMany
+    {
+        return $this->hasMany(ShuttleActivityEvent::class);
+    }
 }

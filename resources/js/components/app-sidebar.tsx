@@ -3,8 +3,25 @@ import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavGroup, type NavItem, type SharedData } from '@/types';
-import { Link, usePage } from '@inertiajs/react';
-import { Building2, BusFront, CalendarClock, CircleHelp, ContactRound, LayoutGrid, Route, UserRound, Users } from 'lucide-react';
+import { Link, usePage, usePoll } from '@inertiajs/react';
+import {
+    BarChart3,
+    Building2,
+    BusFront,
+    CalendarCheck2,
+    CalendarClock,
+    CircleHelp,
+    ClipboardCheck,
+    ClipboardList,
+    ContactRound,
+    Gauge,
+    LayoutGrid,
+    Route,
+    ScanLine,
+    TriangleAlert,
+    UserRound,
+    Users,
+} from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavGroups: NavGroup[] = [
@@ -21,6 +38,11 @@ const mainNavGroups: NavGroup[] = [
                 url: '/admin/schedules',
                 icon: CalendarClock,
             },
+            {
+                title: 'Finished Services',
+                url: '/admin/finished-services',
+                icon: CalendarCheck2,
+            },
         ],
     },
     {
@@ -35,6 +57,11 @@ const mainNavGroups: NavGroup[] = [
                 title: 'Employees',
                 url: '/admin/employees',
                 icon: ContactRound,
+            },
+            {
+                title: 'Departments',
+                url: '/admin/departments',
+                icon: Building2,
             },
         ],
     },
@@ -58,6 +85,46 @@ const mainNavGroups: NavGroup[] = [
             },
         ],
     },
+    {
+        title: 'Reports',
+        items: [
+            {
+                title: 'Service Completion',
+                url: '/admin/reports/service-completion',
+                icon: ClipboardCheck,
+            },
+            {
+                title: 'Fleet Utilization',
+                url: '/admin/reports/fleet-utilization',
+                icon: BarChart3,
+            },
+            {
+                title: 'Route & Schedule Demand',
+                url: '/admin/reports/route-schedule-demand',
+                icon: Route,
+            },
+            {
+                title: 'Shuttle Attendance',
+                url: '/admin/reports/shuttle-attendance',
+                icon: ClipboardList,
+            },
+            {
+                title: 'Driver Utilization',
+                url: '/admin/reports/driver-utilization',
+                icon: Gauge,
+            },
+            {
+                title: 'Login Activity',
+                url: '/admin/reports/login-activity',
+                icon: ScanLine,
+            },
+            {
+                title: 'Incident Log',
+                url: '/admin/reports/incident-log',
+                icon: TriangleAlert,
+            },
+        ],
+    },
 ];
 
 const footerNavItems: NavItem[] = [
@@ -74,11 +141,25 @@ const footerNavItems: NavItem[] = [
 ];
 
 export function AppSidebar() {
-    const { auth } = usePage<SharedData>().props;
+    const { auth, pending_completion_count = 0 } = usePage<SharedData>().props;
+
+    usePoll(30000, {
+        only: ['pending_completion_count'],
+    });
+
     const visibleMainNavGroups = mainNavGroups
         .map((group) => ({
             ...group,
-            items: group.items.filter((item) => auth.user.user_type === 'ADMIN' || !item.url.startsWith('/admin/')),
+            items: group.items
+                .filter((item) => auth.user.user_type === 'ADMIN' || !item.url.startsWith('/admin/'))
+                .map((item) =>
+                    item.url === '/admin/finished-services'
+                        ? {
+                              ...item,
+                              badge: pending_completion_count > 0 ? pending_completion_count : null,
+                          }
+                        : item,
+                ),
         }))
         .filter((group) => group.items.length > 0);
 

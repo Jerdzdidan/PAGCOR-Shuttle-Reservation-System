@@ -9,20 +9,14 @@ final class EmployeeQrCredential
 {
     public function loginUrl(Employee $employee): string
     {
+        $employee->ensureEmployeeCode();
+
         return URL::signedRoute(
-            name: 'employee.login.store',
+            name: 'employee.login.qr',
             parameters: [
-                'employee' => $employee->getRouteKey(),
-                'version' => $employee->qr_token_version,
+                'employeeCode' => $employee->employee_code,
             ],
             absolute: false,
         );
-    }
-
-    public function regenerate(Employee $employee): Employee
-    {
-        $employee->increment('qr_token_version');
-
-        return $employee->refresh();
     }
 }

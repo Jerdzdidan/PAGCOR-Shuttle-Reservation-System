@@ -11,6 +11,7 @@ import { type ReactNode } from 'react';
 
 interface EmployeeIdentity {
     employee_id: number;
+    employee_code: string;
     name: string;
     email: string;
     department: string | null;
@@ -104,7 +105,9 @@ export default function EmployeeLayout({ children, title, description }: Employe
                             </Avatar>
                             <div className="min-w-0 flex-1">
                                 <p className="truncate text-sm font-semibold">{employee.name}</p>
-                                <p className="truncate text-xs text-blue-100/60">{employee.department ?? employee.email}</p>
+                                <p className="truncate text-xs text-blue-100/60">
+                                    {employee.employee_code} · {employee.department ?? employee.email}
+                                </p>
                             </div>
                         </div>
                         <div className="mt-3 flex items-center justify-between gap-2">
@@ -135,7 +138,7 @@ export default function EmployeeLayout({ children, title, description }: Employe
 
             <div className="lg:pl-72">
                 <header className="bg-background/92 sticky top-0 z-30 border-b backdrop-blur-xl">
-                    <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:h-20 lg:px-8">
+                    <div className="flex h-16 w-full items-center justify-between gap-4 px-4 sm:px-6 lg:h-20 lg:px-8">
                         <Link href="/employee/dashboard" className="flex items-center gap-2.5 lg:hidden">
                             <span className="ring-border rounded-lg bg-white p-1 shadow-sm ring-1">
                                 <AppLogoIcon className="size-8 object-contain" />
@@ -154,7 +157,7 @@ export default function EmployeeLayout({ children, title, description }: Employe
                         <div className="flex items-center gap-2">
                             <div className="hidden text-right sm:block lg:hidden">
                                 <p className="max-w-40 truncate text-sm font-semibold">{employee.name}</p>
-                                <p className="text-muted-foreground text-xs">ID {employee.employee_id}</p>
+                                <p className="text-muted-foreground text-xs tabular-nums">ID {employee.employee_code}</p>
                             </div>
                             {employee.priority_status === 'PRIORITY' && (
                                 <Badge className="hidden border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-100 sm:inline-flex dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
@@ -173,7 +176,7 @@ export default function EmployeeLayout({ children, title, description }: Employe
                     </div>
                 </header>
 
-                <main className="mx-auto min-h-[calc(100svh-5rem)] max-w-7xl px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8 lg:pb-8">
+                <main className="min-h-[calc(100svh-5rem)] w-full px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8 lg:pb-8">
                     <div className="mb-6 lg:hidden">
                         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
                         {description && <p className="text-muted-foreground mt-1 text-sm">{description}</p>}

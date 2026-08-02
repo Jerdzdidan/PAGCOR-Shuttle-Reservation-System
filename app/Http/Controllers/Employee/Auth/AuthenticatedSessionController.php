@@ -3,11 +3,16 @@
 namespace App\Http\Controllers\Employee\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Employee\Auth\EmployeeCodeLoginRequest;
 use App\Http\Requests\Employee\Auth\EmployeeQrLoginRequest;
 use App\Models\Employee;
+use App\Models\EmployeeLoginLog;
+use App\Services\EmployeeIdentifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -20,9 +25,68 @@ class AuthenticatedSessionController extends Controller
         ]);
     }
 
-    public function store(EmployeeQrLoginRequest $request, Employee $employee): RedirectResponse
-    {
-        Auth::guard('employee')->login($employee);
+    public function storeQr(
+        EmployeeQrLoginRequest $request,
+        EmployeeIdentifier $identifiers,
+    ): RedirectResponse {
+        $employee = $identifiers->resolve((string) $request->route('employeeCode'));
+
+        if ($employee === null) {
+            throw ValidationException::withMessages([
+                'credential' => 'This employee QR code is invalid.',
+            ]);
+        }
+
+        return $this->authenticate($request, $employee, 'credential');
+    }
+
+    public function storeCode(
+        EmployeeCodeLoginRequest $request,
+        EmployeeIdentifier $identifiers,
+    ): RedirectResponse {
+        $employee = $identifiers->resolve($request->string('employee_code')->toString());
+
+        if ($employee === null) {
+            throw ValidationException::withMessages([
+                'employee_code' => 'The employee ID is invalid or inactive.',
+            ]);
+        }
+
+        return $this->authenticate($request, $employee, 'employee_code');
+    }
+
+    private function authenticate(
+        Request $request,
+        Employee $employee,
+        string $errorKey,
+    ): RedirectResponse {
+        $authenticatedEmployee = DB::transaction(function () use ($employee, $errorKey): Employee {
+            $lockedEmployee = Employee::query()
+                ->lockForUpdate()
+                ->findOrFail($employee->getKey());
+
+            if (! $lockedEmployee->isActive()) {
+                throw ValidationException::withMessages([
+                    $errorKey => $errorKey === 'credential'
+                        ? 'This employee account is inactive. Contact Shuttle Operations for assistance.'
+                        : 'The employee ID is invalid or inactive.',
+                ]);
+            }
+
+            EmployeeLoginLog::query()->create([
+                'employee_id' => $lockedEmployee->getKey(),
+                'employee_id_snapshot' => $lockedEmployee->getKey(),
+                'employee_code_snapshot' => $lockedEmployee->employee_code,
+                'employee_name' => $lockedEmployee->name,
+                'department' => $lockedEmployee->department,
+                'priority_status' => $lockedEmployee->priority_status,
+                'logged_in_at' => now(),
+            ]);
+
+            return $lockedEmployee;
+        }, 5);
+
+        Auth::guard('employee')->login($authenticatedEmployee);
 
         $request->session()->regenerate();
         $request->session()->forget('url.intended');
@@ -34,7 +98,8 @@ class AuthenticatedSessionController extends Controller
     {
         Auth::guard('employee')->logout();
 
-        $request->session()->invalidate();
+        $request->session()->forget('url.intended');
+        $request->session()->regenerate();
         $request->session()->regenerateToken();
 
         return to_route('employee.login');

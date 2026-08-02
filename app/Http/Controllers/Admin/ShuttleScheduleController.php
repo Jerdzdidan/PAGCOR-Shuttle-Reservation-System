@@ -115,6 +115,12 @@ class ShuttleScheduleController extends Controller
             ]);
         }
 
+        if ($schedule->serviceOccurrences()->exists()) {
+            throw ValidationException::withMessages([
+                'schedule' => 'This schedule has retained service history and cannot be deleted. Mark it inactive instead.',
+            ]);
+        }
+
         $schedule->delete();
 
         return to_route('admin.schedules.index')->with('success', 'Schedule deleted successfully.');

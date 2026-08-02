@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Department;
 use App\Models\Employee;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -35,9 +36,10 @@ class UpdateEmployeeRequest extends FormRequest
                 Rule::unique(Employee::class)->ignore($this->route('employee')),
             ],
             'contact_number' => ['nullable', 'string', 'max:30'],
-            'department' => ['nullable', 'string', 'max:100'],
+            'department' => ['nullable', 'string', 'max:100', Rule::exists(Department::class, 'name')],
             'position' => ['nullable', 'string', 'max:100'],
             'priority_status' => ['required', 'in:REGULAR,PRIORITY'],
+            'status' => ['required', 'in:ACTIVE,INACTIVE'],
         ];
     }
 }

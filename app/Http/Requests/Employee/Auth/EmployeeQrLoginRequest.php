@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Employee\Auth;
 
-use App\Models\Employee;
+use App\Services\EmployeeIdentifier;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
@@ -25,7 +25,7 @@ class EmployeeQrLoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'version' => ['required', 'integer', 'min:1'],
+            'version' => ['prohibited'],
             'signature' => ['required', 'string', 'size:64'],
         ];
     }
@@ -43,19 +43,31 @@ class EmployeeQrLoginRequest extends FormRequest
                     return;
                 }
 
-                $employee = $this->route('employee');
+                $employeeCode = $this->route('employeeCode');
 
                 if (
-                    ! $employee instanceof Employee
+                    ! is_string($employeeCode)
+                    || preg_match(EmployeeIdentifier::PATTERN, $employeeCode) !== 1
                     || ! $this->hasValidSignature(false)
-                    || $this->integer('version') !== $employee->qr_token_version
                 ) {
                     $validator->errors()->add(
                         'credential',
-                        'This employee QR code is invalid or has been replaced.',
+                        'This employee QR code is invalid.',
                     );
                 }
             },
+        ];
+    }
+
+    /**
+     * Get the validation error messages.
+     *
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'version.prohibited' => 'This employee QR code uses an obsolete format. Download the permanent QR code from Employee Management.',
         ];
     }
 }

@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Department;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreEmployeeRequest extends FormRequest
 {
@@ -26,9 +28,10 @@ class StoreEmployeeRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:employees,email'],
             'contact_number' => ['nullable', 'string', 'max:30'],
-            'department' => ['nullable', 'string', 'max:100'],
+            'department' => ['nullable', 'string', 'max:100', Rule::exists(Department::class, 'name')],
             'position' => ['nullable', 'string', 'max:100'],
             'priority_status' => ['required', 'in:REGULAR,PRIORITY'],
+            'status' => ['required', 'in:ACTIVE,INACTIVE'],
         ];
     }
 }

@@ -30,6 +30,7 @@ return new class extends Migration
     {
         Schema::table('employees', function (Blueprint $table) {
             $table->string('email')->nullable()->change();
+            $table->dropIndex('employees_priority_status_index');
             $table->dropColumn(['priority_status', 'qr_token_version']);
         });
     }

@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\ServiceOccurrenceStatus;
+use App\Models\ShuttleServiceOccurrence;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -37,26 +39,35 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
+        $administrator = $request->user('web');
         $employee = $request->user('employee');
 
         return array_merge(parent::share($request), [
             'name' => config('app.name'),
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
-                'user' => $request->user(),
+                'user' => $administrator,
                 'employee' => $employee?->only([
                     'employee_id',
+                    'employee_code',
                     'name',
                     'email',
                     'contact_number',
                     'department',
                     'position',
                     'priority_status',
+                    'status',
                 ]),
             ],
             'flash' => [
                 'success' => $request->session()->get('success'),
+                'error' => $request->session()->get('error'),
             ],
+            'pending_completion_count' => fn (): int => $administrator?->isAdmin()
+                ? ShuttleServiceOccurrence::query()
+                    ->where('status', ServiceOccurrenceStatus::AwaitingCompletion)
+                    ->count()
+                : 0,
         ]);
     }
 }

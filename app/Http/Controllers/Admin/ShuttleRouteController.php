@@ -70,8 +70,11 @@ class ShuttleRouteController extends Controller
      */
     public function destroy(ShuttleRoute $route): RedirectResponse
     {
-        if ($route->schedules()->exists()) {
-            throw ValidationException::withMessages(['route' => 'This route cannot be deleted because it is referenced by a schedule.']);
+        if (
+            $route->schedules()->exists()
+            || $route->serviceOccurrences()->exists()
+        ) {
+            throw ValidationException::withMessages(['route' => 'This route cannot be deleted because it is referenced by a schedule or retained service history.']);
         }
 
         $route->delete();

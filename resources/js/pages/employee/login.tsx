@@ -9,10 +9,10 @@ import { useForcedLightAppearance } from '@/hooks/use-appearance';
 import { cn } from '@/lib/utils';
 import { Head, Link, router } from '@inertiajs/react';
 import { BrowserQRCodeReader, type IScannerControls } from '@zxing/browser';
-import { Camera, CheckCircle2, ImageUp, Keyboard, LoaderCircle, LockKeyhole, QrCode, ScanLine, ShieldCheck } from 'lucide-react';
+import { Camera, CheckCircle2, IdCard, ImageUp, LoaderCircle, LockKeyhole, QrCode, ShieldCheck } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 
-type ScanMode = 'camera' | 'upload' | 'scanner';
+type ScanMode = 'camera' | 'upload';
 
 interface EmployeeLoginProps {
     status?: string;
@@ -21,17 +21,18 @@ interface EmployeeLoginProps {
         qr?: string;
         login?: string;
         signature?: string;
+        version?: string;
+        employee_code?: string;
     };
 }
 
 const scanModes: Array<{ value: ScanMode; label: string; icon: typeof Camera }> = [
     { value: 'camera', label: 'Camera', icon: Camera },
     { value: 'upload', label: 'Upload', icon: ImageUp },
-    { value: 'scanner', label: 'Scanner', icon: Keyboard },
 ];
 
 function loginError(errors: EmployeeLoginProps['errors']): string | undefined {
-    return errors?.credential ?? errors?.qr ?? errors?.login ?? errors?.signature;
+    return errors?.credential ?? errors?.qr ?? errors?.login ?? errors?.signature ?? errors?.version;
 }
 
 export default function EmployeeLogin({ status, errors }: EmployeeLoginProps) {
@@ -43,7 +44,8 @@ export default function EmployeeLogin({ status, errors }: EmployeeLoginProps) {
     const [scanError, setScanError] = useState<string>();
     const [cameraSession, setCameraSession] = useState(0);
     const [cameraActive, setCameraActive] = useState(false);
-    const [scannerValue, setScannerValue] = useState('');
+    const [employeeCode, setEmployeeCode] = useState('');
+    const [employeeCodeError, setEmployeeCodeError] = useState<string>();
     const videoRef = useRef<HTMLVideoElement>(null);
     const controlsRef = useRef<IScannerControls | null>(null);
     const processedRef = useRef(false);
@@ -51,7 +53,7 @@ export default function EmployeeLogin({ status, errors }: EmployeeLoginProps) {
 
     const submitQr = useCallback((rawValue: string): void => {
         const signedPath = rawValue.trim();
-        const isEmployeeLoginPath = /^\/employee\/login\/\d+\?version=\d+&signature=[a-f0-9]{64}$/i.test(signedPath);
+        const isEmployeeLoginPath = /^\/employee\/login\/qr\/\d{2}-\d{5}\?signature=[a-f0-9]{64}$/i.test(signedPath);
 
         if (!isEmployeeLoginPath) {
             processedRef.current = false;
@@ -92,7 +94,7 @@ export default function EmployeeLogin({ status, errors }: EmployeeLoginProps) {
 
         if (!navigator.mediaDevices?.getUserMedia) {
             setCameraActive(false);
-            setScanError('Camera scanning is not available in this browser. Upload the QR image or use a scanner instead.');
+            setScanError('Camera scanning is not available in this browser. Upload the QR image instead.');
             return;
         }
 
@@ -137,7 +139,6 @@ export default function EmployeeLogin({ status, errors }: EmployeeLoginProps) {
         processedRef.current = false;
         setMode(nextMode);
         setScanError(undefined);
-        setScannerValue('');
     }
 
     async function uploadQr(event: ChangeEvent<HTMLInputElement>): Promise<void> {
@@ -165,21 +166,43 @@ export default function EmployeeLogin({ status, errors }: EmployeeLoginProps) {
         }
     }
 
-    function submitScanner(event: FormEvent<HTMLFormElement>): void {
-        event.preventDefault();
-        submitQr(scannerValue);
-    }
-
     function restartCamera(): void {
         processedRef.current = false;
         setCameraSession((session) => session + 1);
+    }
+
+    function updateEmployeeCode(value: string): void {
+        const digits = value.replace(/\D/g, '').slice(0, 7);
+        const formatted = digits.length > 2 ? `${digits.slice(0, 2)}-${digits.slice(2)}` : digits;
+
+        setEmployeeCode(formatted);
+        setEmployeeCodeError(undefined);
+    }
+
+    function submitEmployeeCode(event: FormEvent<HTMLFormElement>): void {
+        event.preventDefault();
+        setEmployeeCodeError(undefined);
+
+        router.post(
+            '/employee/login',
+            { employee_code: employeeCode },
+            {
+                preserveScroll: true,
+                onStart: () => setProcessing(true),
+                onError: (responseErrors) => {
+                    const message = responseErrors.employee_code;
+                    setEmployeeCodeError(typeof message === 'string' ? message : 'The employee ID could not be verified.');
+                },
+                onFinish: () => setProcessing(false),
+            },
+        );
     }
 
     const displayedError = scanError ?? loginError(errors);
 
     return (
         <>
-            <Head title="Employee QR login" />
+            <Head title="Employee login" />
             <div className="bg-background grid min-h-svh lg:grid-cols-[minmax(0,0.9fr)_minmax(34rem,1.1fr)]">
                 <section className="bg-brand-navy relative hidden overflow-hidden px-10 py-12 text-white lg:flex lg:flex-col xl:px-16">
                     <div className="bg-brand-blue/35 absolute -top-48 -right-40 size-[34rem] rounded-full blur-3xl" />
@@ -200,7 +223,7 @@ export default function EmployeeLogin({ status, errors }: EmployeeLoginProps) {
                             <p className="text-sm font-semibold tracking-[0.22em] text-blue-200 uppercase">Employee access</p>
                             <h1 className="text-4xl leading-tight font-semibold xl:text-5xl">Your daily ride, reserved in a scan.</h1>
                             <p className="max-w-md text-base leading-7 text-blue-100/70">
-                                Use your unique employee QR code to securely view schedules, choose a seat, and manage upcoming shuttle trips.
+                                Use your unique employee QR code or employee ID to view schedules, choose a seat, and manage upcoming shuttle trips.
                             </p>
                         </div>
 
@@ -240,8 +263,8 @@ export default function EmployeeLogin({ status, errors }: EmployeeLoginProps) {
                                 <div className="bg-brand-sky text-brand-blue mx-auto flex size-12 items-center justify-center rounded-2xl dark:bg-blue-950 dark:text-blue-300">
                                     <QrCode className="size-6" />
                                 </div>
-                                <CardTitle className="text-2xl">Scan to enter</CardTitle>
-                                <CardDescription>Present your assigned employee QR code using any option below.</CardDescription>
+                                <CardTitle className="text-2xl">Employee login</CardTitle>
+                                <CardDescription>Scan your assigned QR code or enter your employee ID.</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-5">
                                 {status && (
@@ -251,7 +274,7 @@ export default function EmployeeLogin({ status, errors }: EmployeeLoginProps) {
                                     </Alert>
                                 )}
 
-                                <div className="bg-muted grid grid-cols-3 rounded-xl p-1" role="tablist" aria-label="QR login method">
+                                <div className="bg-muted grid grid-cols-2 rounded-xl p-1" role="tablist" aria-label="QR login method">
                                     {scanModes.map((item) => {
                                         const Icon = item.icon;
                                         const isActive = mode === item.value;
@@ -347,39 +370,48 @@ export default function EmployeeLogin({ status, errors }: EmployeeLoginProps) {
                                     </div>
                                 )}
 
-                                {mode === 'scanner' && (
-                                    <form onSubmit={submitScanner} className="bg-muted/20 space-y-4 rounded-2xl border p-5">
+                                <InputError message={displayedError} className="text-center" />
+
+                                <div className="relative border-t pt-5">
+                                    <span className="bg-card text-muted-foreground absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-3 text-xs font-medium uppercase">
+                                        Or use employee ID
+                                    </span>
+                                    <form
+                                        onSubmit={submitEmployeeCode}
+                                        className="space-y-4 rounded-2xl border bg-blue-50/45 p-5 dark:bg-blue-950/20"
+                                    >
                                         <div className="flex items-start gap-3">
                                             <span className="bg-primary/10 text-primary rounded-xl p-2.5">
-                                                <ScanLine className="size-5" />
+                                                <IdCard className="size-5" />
                                             </span>
                                             <div>
-                                                <h2 className="font-semibold">Scanner or paste</h2>
+                                                <h2 className="font-semibold">Log in with employee ID</h2>
                                                 <p className="text-muted-foreground text-sm leading-6">
-                                                    Scan with a handheld reader, or paste the full value encoded in your QR.
+                                                    Enter the permanent ID printed below your QR code.
                                                 </p>
                                             </div>
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="qr-value">Employee QR value</Label>
+                                            <Label htmlFor="employee-code">Employee ID</Label>
                                             <Input
-                                                id="qr-value"
-                                                value={scannerValue}
-                                                onChange={(event) => setScannerValue(event.target.value)}
-                                                placeholder="/employee/login/…"
-                                                autoFocus
+                                                id="employee-code"
+                                                value={employeeCode}
+                                                onChange={(event) => updateEmployeeCode(event.target.value)}
+                                                placeholder="26-00001"
+                                                inputMode="numeric"
+                                                maxLength={8}
                                                 autoComplete="off"
+                                                className="font-mono text-base tracking-wider"
                                                 disabled={processing}
                                             />
+                                            <InputError message={employeeCodeError ?? errors?.employee_code} />
                                         </div>
-                                        <Button type="submit" className="w-full" disabled={processing || scannerValue.trim() === ''}>
+                                        <Button type="submit" className="w-full" disabled={processing || !/^\d{2}-\d{5}$/.test(employeeCode)}>
                                             {processing ? <LoaderCircle className="animate-spin" /> : <LockKeyhole />}
-                                            Verify and log in
+                                            Log in with employee ID
                                         </Button>
                                     </form>
-                                )}
-
-                                <InputError message={displayedError} className="text-center" />
+                                </div>
 
                                 <div className="text-muted-foreground flex items-center justify-center gap-2 border-t pt-5 text-sm">
                                     Administrator?

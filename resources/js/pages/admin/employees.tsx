@@ -8,21 +8,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
-import { Eye, Plus, RefreshCw, Upload } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
-import { useState, type FormEvent } from 'react';
+import { Download, Eye, Plus, ShieldOff, Upload } from 'lucide-react';
+import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
+import { useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
 
 type ManagedEmployee = {
     employee_id: number;
+    employee_code: string;
     name: string;
     email: string;
     contact_number: string | null;
     department: string | null;
     position: string | null;
     priority_status: 'REGULAR' | 'PRIORITY';
+    status: 'ACTIVE' | 'INACTIVE';
     qr_login_url: string;
     created_at: string;
+    future_reservations_count: number;
+    future_waitlist_count: number;
 };
 
 type EmployeeFormData = {
@@ -32,10 +36,17 @@ type EmployeeFormData = {
     department: string;
     position: string;
     priority_status: 'REGULAR' | 'PRIORITY';
+    status: 'ACTIVE' | 'INACTIVE';
+};
+
+type ManagedDepartment = {
+    id: number;
+    name: string;
 };
 
 interface EmployeesPageProps {
     employees: ManagedEmployee[];
+    departments: ManagedDepartment[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -50,27 +61,58 @@ const emptyForm: EmployeeFormData = {
     department: '',
     position: '',
     priority_status: 'REGULAR',
+    status: 'ACTIVE',
 };
+const noDepartmentValue = '__NO_DEPARTMENT__';
 
-export default function EmployeesPage({ employees }: EmployeesPageProps) {
+function priorityLabel(employee: ManagedEmployee): string {
+    return employee.priority_status === 'PRIORITY' ? 'Priority person' : 'Regular employee';
+}
+
+function downloadFileName(employee: ManagedEmployee): string {
+    const normalizedName = employee.name
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+
+    return `${normalizedName || 'employee'}-${employee.employee_code}-qr.png`;
+}
+
+function drawCenteredFittedText(context: CanvasRenderingContext2D, text: string, y: number, maximumWidth: number, initialFontSize: number): void {
+    let fontSize = initialFontSize;
+
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+
+    do {
+        context.font = `700 ${fontSize}px Arial, sans-serif`;
+        fontSize -= 2;
+    } while (context.measureText(text).width > maximumWidth && fontSize >= 28);
+
+    context.fillText(text, 500, y);
+}
+
+export default function EmployeesPage({ employees, departments }: EmployeesPageProps) {
     const [formOpen, setFormOpen] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
     const [importInputKey, setImportInputKey] = useState(0);
     const [editingEmployee, setEditingEmployee] = useState<ManagedEmployee | null>(null);
     const [viewingEmployee, setViewingEmployee] = useState<ManagedEmployee | null>(null);
     const [deletingEmployee, setDeletingEmployee] = useState<ManagedEmployee | null>(null);
-    const [regeneratingEmployee, setRegeneratingEmployee] = useState<ManagedEmployee | null>(null);
+    const [deactivatingEmployee, setDeactivatingEmployee] = useState<ManagedEmployee | null>(null);
+    const qrCanvasRef = useRef<HTMLCanvasElement>(null);
     const form = useForm<EmployeeFormData>(emptyForm);
     const importForm = useForm<{ file: File | null }>({ file: null });
     const deleteForm = useForm<Record<string, never>>({});
-    const regenerateForm = useForm({});
+    const deactivateForm = useForm<{ confirmed: boolean }>({ confirmed: true });
 
     const columns: AdminTableColumn<ManagedEmployee>[] = [
         {
             key: 'employee_id',
             label: 'Employee ID',
-            render: (employee) => <span className="font-medium">#{employee.employee_id}</span>,
-            sortValue: (employee) => employee.employee_id,
+            render: (employee) => <span className="font-medium tabular-nums">{employee.employee_code}</span>,
+            sortValue: (employee) => employee.employee_code,
         },
         { key: 'name', label: 'Name', render: (employee) => employee.name, sortValue: (employee) => employee.name },
         {
@@ -95,6 +137,14 @@ export default function EmployeesPage({ employees }: EmployeesPageProps) {
             ),
             sortValue: (employee) => employee.priority_status,
         },
+        {
+            key: 'status',
+            label: 'Access',
+            render: (employee) => (
+                <Badge variant={employee.status === 'ACTIVE' ? 'outline' : 'secondary'}>{employee.status === 'ACTIVE' ? 'Active' : 'Inactive'}</Badge>
+            ),
+            sortValue: (employee) => employee.status,
+        },
         { key: 'email', label: 'Email', render: (employee) => employee.email, sortValue: (employee) => employee.email },
     ];
 
@@ -114,6 +164,7 @@ export default function EmployeesPage({ employees }: EmployeesPageProps) {
             department: employee.department ?? '',
             position: employee.position ?? '',
             priority_status: employee.priority_status,
+            status: employee.status,
         });
         form.clearErrors();
         setFormOpen(true);
@@ -165,19 +216,105 @@ export default function EmployeesPage({ employees }: EmployeesPageProps) {
         });
     }
 
-    function confirmQrRegeneration(): void {
-        if (!regeneratingEmployee) {
+    function openDeactivate(employee: ManagedEmployee): void {
+        deactivateForm.setData('confirmed', true);
+        deactivateForm.clearErrors();
+        setFormOpen(false);
+        setDeactivatingEmployee(employee);
+    }
+
+    function confirmDeactivate(): void {
+        if (!deactivatingEmployee) {
             return;
         }
 
-        regenerateForm.post(`/admin/employees/${regeneratingEmployee.employee_id}/qr/regenerate`, {
+        deactivateForm.post(`/admin/employees/${deactivatingEmployee.employee_id}/deactivate`, {
             preserveScroll: true,
             onSuccess: () => {
-                setRegeneratingEmployee(null);
-                setViewingEmployee(null);
-                toast.success('Employee QR code regenerated. The previous QR code can no longer be used.');
+                setDeactivatingEmployee(null);
+                toast.success('Employee travel resolved and QR access deactivated.');
             },
         });
+    }
+
+    function downloadEmployeeQr(employee: ManagedEmployee): void {
+        const qrCanvas = qrCanvasRef.current;
+
+        if (!qrCanvas) {
+            toast.error('The employee QR code is not ready yet.');
+            return;
+        }
+
+        const downloadCanvas = document.createElement('canvas');
+        downloadCanvas.width = 1000;
+        downloadCanvas.height = 1240;
+
+        const context = downloadCanvas.getContext('2d');
+
+        if (!context) {
+            toast.error('The QR image could not be prepared for download.');
+            return;
+        }
+
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, downloadCanvas.width, downloadCanvas.height);
+
+        context.fillStyle = '#10213d';
+        context.fillRect(0, 0, downloadCanvas.width, 140);
+
+        context.fillStyle = '#ffffff';
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.font = '700 38px Arial, sans-serif';
+        context.fillText('PAGCOR', 500, 50);
+        context.font = '600 25px Arial, sans-serif';
+        context.fillText('SHUTTLE RESERVATION SYSTEM', 500, 96);
+
+        context.imageSmoothingEnabled = false;
+        context.drawImage(qrCanvas, 130, 180, 740, 740);
+
+        context.fillStyle = '#10213d';
+        drawCenteredFittedText(context, employee.name, 990, 820, 52);
+
+        context.fillStyle = '#61708a';
+        context.font = '500 27px Arial, sans-serif';
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.fillText(`Employee ID ${employee.employee_code}`, 500, 1045);
+
+        const label = priorityLabel(employee);
+        context.font = '700 25px Arial, sans-serif';
+        const badgeWidth = Math.max(250, context.measureText(label).width + 76);
+        const badgeX = (downloadCanvas.width - badgeWidth) / 2;
+
+        context.fillStyle = employee.priority_status === 'PRIORITY' ? '#fff1c2' : '#e8f1ff';
+        context.beginPath();
+        context.roundRect(badgeX, 1080, badgeWidth, 62, 31);
+        context.fill();
+
+        context.fillStyle = employee.priority_status === 'PRIORITY' ? '#805800' : '#174ea6';
+        context.fillText(label, 500, 1111);
+
+        context.fillStyle = '#7b879b';
+        context.font = '500 22px Arial, sans-serif';
+        context.fillText('Scan to securely sign in', 500, 1190);
+
+        downloadCanvas.toBlob((blob) => {
+            if (!blob) {
+                toast.error('The QR image could not be generated.');
+                return;
+            }
+
+            const downloadUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = downloadFileName(employee);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
+            toast.success('Employee QR image downloaded.');
+        }, 'image/png');
     }
 
     return (
@@ -213,7 +350,7 @@ export default function EmployeesPage({ employees }: EmployeesPageProps) {
                     columns={columns}
                     searchPlaceholder="Search employees..."
                     getSearchText={(employee) =>
-                        `${employee.employee_id} ${employee.name} ${employee.email} ${employee.contact_number ?? ''} ${employee.department ?? ''} ${employee.position ?? ''} ${employee.priority_status}`
+                        `${employee.employee_code} ${employee.employee_id} ${employee.name} ${employee.email} ${employee.contact_number ?? ''} ${employee.department ?? ''} ${employee.position ?? ''} ${employee.priority_status} ${employee.status}`
                     }
                     getRowKey={(employee) => employee.employee_id}
                     onView={setViewingEmployee}
@@ -230,7 +367,9 @@ export default function EmployeesPage({ employees }: EmployeesPageProps) {
                     <DialogHeader>
                         <DialogTitle>{editingEmployee ? 'Edit employee' : 'Add employee'}</DialogTitle>
                         <DialogDescription>
-                            {editingEmployee ? 'Update this employee’s information.' : 'The employee ID and QR code will be generated automatically.'}
+                            {editingEmployee
+                                ? 'Update this employee’s information.'
+                                : 'The YY-00000 employee ID and permanent QR code will be generated automatically.'}
                         </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={submit} className="space-y-4">
@@ -268,11 +407,23 @@ export default function EmployeesPage({ employees }: EmployeesPageProps) {
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="employee-department">Department</Label>
-                                <Input
-                                    id="employee-department"
-                                    value={form.data.department}
-                                    onChange={(event) => form.setData('department', event.target.value)}
-                                />
+                                <Select
+                                    value={form.data.department || noDepartmentValue}
+                                    onValueChange={(value) => form.setData('department', value === noDepartmentValue ? '' : value)}
+                                >
+                                    <SelectTrigger id="employee-department">
+                                        <SelectValue placeholder="Select department" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value={noDepartmentValue}>No department</SelectItem>
+                                        {departments.map((department) => (
+                                            <SelectItem key={department.id} value={department.name}>
+                                                {department.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-muted-foreground text-xs">Department choices are maintained in Department management.</p>
                                 {form.errors.department && <p className="text-destructive text-sm">{form.errors.department}</p>}
                             </div>
                             <div className="space-y-2">
@@ -304,7 +455,47 @@ export default function EmployeesPage({ employees }: EmployeesPageProps) {
                                 </p>
                                 {form.errors.priority_status && <p className="text-destructive text-sm">{form.errors.priority_status}</p>}
                             </div>
+                            <div className="space-y-2 sm:col-span-2">
+                                <Label>QR access status</Label>
+                                <Select value={form.data.status} onValueChange={(value: 'ACTIVE' | 'INACTIVE') => form.setData('status', value)}>
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="ACTIVE">Active — may sign in and board</SelectItem>
+                                        <SelectItem value="INACTIVE">Inactive — access blocked</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-muted-foreground text-xs">
+                                    The permanent QR stays unchanged. Employees with future reservations or waitlist entries cannot be made inactive
+                                    until those entries are resolved.
+                                </p>
+                                {form.errors.status && <p className="text-destructive text-sm">{form.errors.status}</p>}
+                            </div>
                         </div>
+                        {editingEmployee?.status === 'ACTIVE' && (
+                            <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50/70 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900 dark:bg-amber-950/20">
+                                <div>
+                                    <p className="text-sm font-medium">Need to deactivate this employee?</p>
+                                    <p className="text-muted-foreground mt-1 text-xs">
+                                        Resolve {editingEmployee.future_reservations_count} future{' '}
+                                        {editingEmployee.future_reservations_count === 1 ? 'reservation' : 'reservations'} and{' '}
+                                        {editingEmployee.future_waitlist_count}{' '}
+                                        {editingEmployee.future_waitlist_count === 1 ? 'waitlist entry' : 'waitlist entries'} in one action.
+                                    </p>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="sm"
+                                    className="shrink-0"
+                                    onClick={() => openDeactivate(editingEmployee)}
+                                >
+                                    <ShieldOff />
+                                    Resolve & deactivate
+                                </Button>
+                            </div>
+                        )}
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setFormOpen(false)} disabled={form.processing}>
                                 Cancel
@@ -322,8 +513,9 @@ export default function EmployeesPage({ employees }: EmployeesPageProps) {
                     <DialogHeader>
                         <DialogTitle>Import employees</DialogTitle>
                         <DialogDescription>
-                            Upload an XLSX, XLS, or CSV file with these headings: name, email, contact_number, department, position, priority_status.
-                            Name and email are required; priority_status may be REGULAR or PRIORITY and defaults to REGULAR.
+                            Upload an XLSX, XLS, or CSV file with these headings: name, email, contact_number, department, position, priority_status,
+                            status. Department names must already exist in Department management. Name and email are required; priority_status
+                            defaults to REGULAR and status defaults to ACTIVE.
                         </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={submitImport} className="space-y-4">
@@ -360,7 +552,7 @@ export default function EmployeesPage({ employees }: EmployeesPageProps) {
             </Dialog>
 
             <Dialog open={viewingEmployee !== null} onOpenChange={(open) => !open && setViewingEmployee(null)}>
-                <DialogContent className="sm:max-w-2xl">
+                <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-2xl">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <Eye className="size-5" />
@@ -376,10 +568,13 @@ export default function EmployeesPage({ employees }: EmployeesPageProps) {
                                     size={192}
                                     level="H"
                                     marginSize={4}
-                                    title={`QR code for employee ${viewingEmployee.employee_id}`}
+                                    title={`QR code for employee ${viewingEmployee.employee_code}`}
                                 />
+                                <div className="hidden" aria-hidden="true">
+                                    <QRCodeCanvas ref={qrCanvasRef} value={viewingEmployee.qr_login_url} size={768} level="H" marginSize={4} />
+                                </div>
                                 <div>
-                                    <p className="text-sm font-semibold">Employee #{viewingEmployee.employee_id}</p>
+                                    <p className="text-sm font-semibold tabular-nums">Employee ID {viewingEmployee.employee_code}</p>
                                     <p className="text-xs text-neutral-600">Scan to securely sign in</p>
                                 </div>
                                 <Button
@@ -387,10 +582,10 @@ export default function EmployeesPage({ employees }: EmployeesPageProps) {
                                     size="sm"
                                     variant="outline"
                                     className="w-full"
-                                    onClick={() => setRegeneratingEmployee(viewingEmployee)}
+                                    onClick={() => downloadEmployeeQr(viewingEmployee)}
                                 >
-                                    <RefreshCw />
-                                    Regenerate QR
+                                    <Download />
+                                    Download QR
                                 </Button>
                             </div>
                             <dl className="grid gap-4 text-sm">
@@ -416,6 +611,14 @@ export default function EmployeesPage({ employees }: EmployeesPageProps) {
                                         </Badge>
                                     </dd>
                                 </div>
+                                <div>
+                                    <dt className="text-muted-foreground">QR access</dt>
+                                    <dd className="mt-1">
+                                        <Badge variant={viewingEmployee.status === 'ACTIVE' ? 'outline' : 'secondary'}>
+                                            {viewingEmployee.status === 'ACTIVE' ? 'Active' : 'Inactive'}
+                                        </Badge>
+                                    </dd>
+                                </div>
                                 <div className="grid gap-4 sm:grid-cols-2">
                                     <div>
                                         <dt className="text-muted-foreground">Email</dt>
@@ -436,22 +639,52 @@ export default function EmployeesPage({ employees }: EmployeesPageProps) {
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={regeneratingEmployee !== null} onOpenChange={(open) => !open && setRegeneratingEmployee(null)}>
+            <Dialog
+                open={deactivatingEmployee !== null}
+                onOpenChange={(open) => !open && !deactivateForm.processing && setDeactivatingEmployee(null)}
+            >
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Regenerate employee QR?</DialogTitle>
+                        <DialogTitle>Resolve travel and deactivate?</DialogTitle>
                         <DialogDescription>
-                            The current QR code for {regeneratingEmployee?.name ?? 'this employee'} will immediately stop working. Print or issue the
-                            new QR code afterward.
+                            This blocks {deactivatingEmployee?.name ?? 'this employee'} from QR login and boarding. Their permanent QR and historical
+                            records remain unchanged.
                         </DialogDescription>
                     </DialogHeader>
+                    {deactivatingEmployee && (
+                        <div className="grid gap-3 text-sm">
+                            <div className="rounded-lg border p-3">
+                                <p className="font-medium">
+                                    {deactivatingEmployee.future_reservations_count} future{' '}
+                                    {deactivatingEmployee.future_reservations_count === 1 ? 'reservation' : 'reservations'}
+                                </p>
+                                <p className="text-muted-foreground mt-1 text-xs">
+                                    Each reservation will be cancelled. Any released seat will be offered to the next eligible waitlisted employee
+                                    using the existing priority-first queue.
+                                </p>
+                            </div>
+                            <div className="rounded-lg border p-3">
+                                <p className="font-medium">
+                                    {deactivatingEmployee.future_waitlist_count} future{' '}
+                                    {deactivatingEmployee.future_waitlist_count === 1 ? 'waitlist entry' : 'waitlist entries'}
+                                </p>
+                                <p className="text-muted-foreground mt-1 text-xs">
+                                    Each remaining queue entry will be withdrawn and recorded in the activity ledger.
+                                </p>
+                            </div>
+                            <p className="text-muted-foreground text-xs">
+                                The server rechecks all future entries when you confirm, so newly created travel is included atomically.
+                            </p>
+                        </div>
+                    )}
+                    {deactivateForm.errors.confirmed && <p className="text-destructive text-sm">{deactivateForm.errors.confirmed}</p>}
                     <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setRegeneratingEmployee(null)} disabled={regenerateForm.processing}>
-                            Keep current QR
+                        <Button type="button" variant="outline" onClick={() => setDeactivatingEmployee(null)} disabled={deactivateForm.processing}>
+                            Keep active
                         </Button>
-                        <Button type="button" onClick={confirmQrRegeneration} disabled={regenerateForm.processing}>
-                            <RefreshCw />
-                            {regenerateForm.processing ? 'Regenerating...' : 'Regenerate QR'}
+                        <Button type="button" variant="destructive" onClick={confirmDeactivate} disabled={deactivateForm.processing}>
+                            <ShieldOff />
+                            {deactivateForm.processing ? 'Resolving...' : 'Resolve & deactivate'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
