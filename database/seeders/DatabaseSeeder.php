@@ -33,6 +33,7 @@ class DatabaseSeeder extends Seeder
             ShuttleScheduleSeeder::class,
             ShuttleOperationsSeeder::class,
             EmployeeLoginLogSeeder::class,
+            UserLogSeeder::class,
         ]);
 
         $this->reportSignInDetails();
@@ -134,6 +135,7 @@ class DatabaseSeeder extends Seeder
                 ['Booking activity events', DB::table('shuttle_activity_events')->count()],
                 ['Closeout corrections', DB::table('shuttle_service_corrections')->count()],
                 ['Portal sign-ins', DB::table('employee_login_logs')->count()],
+                ['User log entries', DB::table('user_logs')->count()],
             ],
         );
         $this->command->comment(

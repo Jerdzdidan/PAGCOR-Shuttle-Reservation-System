@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RecordsUserActivity;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -9,7 +10,7 @@ use LogicException;
 
 class Employee extends Authenticatable
 {
-    use Notifiable;
+    use Notifiable, RecordsUserActivity;
 
     public const STATUS_ACTIVE = 'ACTIVE';
 

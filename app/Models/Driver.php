@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RecordsUserActivity;
 use Database\Factories\DriverFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Driver extends Model
 {
     /** @use HasFactory<DriverFactory> */
-    use HasFactory;
+    use HasFactory, RecordsUserActivity;
 
     /** @var list<string> */
     protected $fillable = ['name', 'employee_id', 'contact_number', 'license_number', 'license_expires_at', 'status', 'notes'];

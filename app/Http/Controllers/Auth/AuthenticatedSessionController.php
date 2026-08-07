@@ -32,8 +32,32 @@ class AuthenticatedSessionController extends Controller
         $request->authenticate();
 
         $request->session()->regenerate();
+        $this->forgetEmployeeIntendedUrl($request);
 
         return redirect()->intended(route('dashboard', absolute: false));
+    }
+
+    /**
+     * Drops an intended URL that belongs to the employee portal.
+     *
+     * Visiting an employee page while signed out parks that URL in the session.
+     * Signing in here authenticates the `web` guard only, so following it would
+     * bounce a perfectly valid administrator straight back to the employee
+     * sign-in page.
+     */
+    private function forgetEmployeeIntendedUrl(Request $request): void
+    {
+        $intendedUrl = $request->session()->get('url.intended');
+
+        if (! is_string($intendedUrl)) {
+            return;
+        }
+
+        $path = trim((string) parse_url($intendedUrl, PHP_URL_PATH), '/');
+
+        if ($path === 'employee' || str_starts_with($path, 'employee/')) {
+            $request->session()->forget('url.intended');
+        }
     }
 
     /**

@@ -131,7 +131,7 @@ class ShuttleScheduleController extends Controller
     {
         ShuttleSchedule::create($request->validated());
 
-        return to_route('admin.schedules.index')->with('success', 'Schedule created successfully.');
+        return back()->with('success', 'Schedule created successfully.');
     }
 
     /**
@@ -157,7 +157,7 @@ class ShuttleScheduleController extends Controller
     {
         $schedule->update($request->validated());
 
-        return to_route('admin.schedules.index')->with('success', 'Schedule updated successfully.');
+        return back()->with('success', 'Schedule updated successfully.');
     }
 
     /**
@@ -202,7 +202,7 @@ class ShuttleScheduleController extends Controller
             return $retained;
         }, 5);
 
-        return to_route('admin.schedules.index')->with(
+        return back()->with(
             'success',
             $retainedServices === 0
                 ? 'Schedule deleted successfully.'

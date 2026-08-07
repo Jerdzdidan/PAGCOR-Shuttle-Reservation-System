@@ -81,8 +81,6 @@ export interface ServiceOccurrence {
     unserved_waitlist_count?: number;
     opening_odometer_km?: number | string | null;
     closing_odometer_km?: number | string | null;
-    suggested_opening_odometer_km?: number | string | null;
-    opening_odometer_prefill?: number | string | null;
     trip_distance_km?: number | string | null;
     distance_km?: number | string | null;
     actual_departure_at?: string | null;

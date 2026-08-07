@@ -470,54 +470,24 @@ class EmployeeReservationService
         $date = $this->parseTravelDate($travelDate);
         $today = CarbonImmutable::now($this->operatingTimezone())->startOfDay();
 
-        if ($date->lt($today) || $date->gt($today->addDays($this->bookingHorizonDays()))) {
+        /*
+         * Seats are only handed out on the day of travel. Later dates stay
+         * browsable so employees can see what is scheduled, but nothing can be
+         * held in advance.
+         */
+        if (! $date->equalTo($today)) {
             throw ValidationException::withMessages([
-                'travel_date' => 'Choose a travel date within the available booking window.',
+                'travel_date' => $date->lt($today)
+                    ? 'That travel date has already passed.'
+                    : 'Seats can only be reserved on the day of travel.',
             ]);
         }
 
         $occurrence = $this->occurrenceFor($schedule, $date, lock: true);
 
-        if ($date->equalTo($today)) {
-            if ($occurrence === null) {
-                throw ValidationException::withMessages([
-                    'schedule_id' => 'This departure is not available for reservations today.',
-                ]);
-            }
-
-            $this->assertBeforeDeparture($schedule, $date, $occurrence);
-
-            return [$date, $occurrence];
-        }
-
-        if (
-            $schedule->status !== 'ACTIVE'
-            || $schedule->route->status !== 'ACTIVE'
-            || $schedule->vehicle->status !== 'ACTIVE'
-            || $schedule->driver->status !== 'ACTIVE'
-        ) {
+        if ($occurrence === null) {
             throw ValidationException::withMessages([
-                'schedule_id' => 'This shuttle schedule is not currently available for reservations.',
-            ]);
-        }
-
-        if (
-            $date->toDateString() < $schedule->effective_from->toDateString()
-            || (
-                $schedule->effective_until !== null
-                && $date->toDateString() > $schedule->effective_until->toDateString()
-            )
-        ) {
-            throw ValidationException::withMessages([
-                'travel_date' => 'This schedule does not operate on the selected date.',
-            ]);
-        }
-
-        $operatingDay = mb_strtolower($date->format('l'));
-
-        if (! in_array($operatingDay, $schedule->operating_days ?? [], true)) {
-            throw ValidationException::withMessages([
-                'travel_date' => 'This schedule does not operate on the selected day.',
+                'schedule_id' => 'This departure is not available for reservations today.',
             ]);
         }
 
@@ -797,10 +767,5 @@ class EmployeeReservationService
     private function operatingTimezone(): string
     {
         return (string) config('shuttle.operating_timezone', 'Asia/Manila');
-    }
-
-    private function bookingHorizonDays(): int
-    {
-        return max(0, (int) config('shuttle.booking_horizon_days', 30));
     }
 }

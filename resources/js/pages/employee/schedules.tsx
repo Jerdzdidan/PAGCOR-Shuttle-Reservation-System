@@ -105,6 +105,8 @@ interface SchedulesPageProps {
     }>;
     schedules: ScheduleOccurrence[];
     dailyEntry?: DailyEntry | null;
+    /** Seats are only handed out on the day of travel; later dates are read-only. */
+    reservationsOpen?: boolean;
     operating_timezone?: string;
 }
 
@@ -218,11 +220,13 @@ function ScheduleCard({
     selectedDate,
     priorityStatus,
     dailyEntry,
+    reservationsOpen,
 }: {
     schedule: ScheduleOccurrence;
     selectedDate: string;
     priorityStatus: PriorityStatus;
     dailyEntry: DailyEntry | null;
+    reservationsOpen: boolean;
 }) {
     const [origin, destination] = routeEndpoints(schedule);
     const usedEligibleSeats = Math.max(0, schedule.eligible_capacity - schedule.available_eligible_seats);
@@ -277,8 +281,9 @@ function ScheduleCard({
                                 </Badge>
                             )}
                             {!bookingOpen && <Badge variant="secondary">Booking closed</Badge>}
-                            {bookingOpen && !waitlistEnabled && <Badge variant="outline">Waitlist disabled</Badge>}
-                            {bookingOpen && waitlistEnabled && waitlistIsFull && <Badge variant="destructive">Waitlist full</Badge>}
+                            {bookingOpen && !reservationsOpen && <Badge variant="secondary">Opens on the travel day</Badge>}
+                            {bookingOpen && reservationsOpen && !waitlistEnabled && <Badge variant="outline">Waitlist disabled</Badge>}
+                            {bookingOpen && reservationsOpen && waitlistEnabled && waitlistIsFull && <Badge variant="destructive">Waitlist full</Badge>}
                         </div>
                         <h2 className="mt-3 truncate text-lg font-semibold">{schedule.route.name}</h2>
                     </div>
@@ -425,6 +430,10 @@ function ScheduleCard({
                     />
                 ) : schedule.waitlist ? (
                     <span className="text-muted-foreground text-sm font-medium">Departure has closed</span>
+                ) : bookingOpen && !reservationsOpen ? (
+                    <span className="text-muted-foreground max-w-xs text-sm font-medium sm:text-right">
+                        Seats for this departure open on {displayTravelDate(selectedDate)}.
+                    </span>
                 ) : blockedByOtherBooking && bookingOpen ? (
                     <span className="text-muted-foreground max-w-xs text-sm font-medium sm:text-right">{blockedMessage}</span>
                 ) : schedule.is_full_for_employee && bookingOpen && schedule.eligible_capacity > 0 && !waitlistEnabled ? (
@@ -461,6 +470,7 @@ export default function EmployeeSchedules({
     dates,
     schedules,
     dailyEntry = null,
+    reservationsOpen = true,
     operating_timezone = 'Asia/Manila',
 }: SchedulesPageProps) {
     const { auth } = usePage<EmployeeSharedProps>().props;
@@ -468,7 +478,7 @@ export default function EmployeeSchedules({
     const [directionFilter, setDirectionFilter] = useState('ALL');
 
     usePoll(10000, {
-        only: ['schedules', 'dailyEntry'],
+        only: ['schedules', 'dailyEntry', 'reservationsOpen'],
     });
 
     const routeNames = useMemo(() => [...new Set(schedules.map((schedule) => schedule.route.name))].sort(), [schedules]);
@@ -491,7 +501,7 @@ export default function EmployeeSchedules({
                 preserveState: true,
                 preserveScroll: true,
                 replace: true,
-                only: ['selectedDate', 'dates', 'schedules', 'dailyEntry'],
+                only: ['selectedDate', 'dates', 'schedules', 'dailyEntry', 'reservationsOpen'],
             },
         );
     }
@@ -506,7 +516,9 @@ export default function EmployeeSchedules({
                             <CalendarDays className="text-primary size-5" />
                             <div>
                                 <h2 className="font-semibold">Select travel date</h2>
-                                <p className="text-muted-foreground text-xs">Reservations open up to 30 days ahead · {operating_timezone}</p>
+                                <p className="text-muted-foreground text-xs">
+                                    Browse up to 30 days ahead · Seats are reserved on the travel day · {operating_timezone}
+                                </p>
                             </div>
                         </div>
                     </CardHeader>
@@ -542,6 +554,17 @@ export default function EmployeeSchedules({
                         </div>
                     </CardContent>
                 </Card>
+
+                {!reservationsOpen && (
+                    <Alert>
+                        <CalendarDays />
+                        <AlertTitle>Viewing a future travel date</AlertTitle>
+                        <AlertDescription>
+                            You can see what is scheduled, but seats are only reserved on the day of travel. Come back on{' '}
+                            {displayTravelDate(selectedDate)} to pick a seat or join a waitlist.
+                        </AlertDescription>
+                    </Alert>
+                )}
 
                 <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
                     <div>
@@ -612,6 +635,7 @@ export default function EmployeeSchedules({
                                 selectedDate={selectedDate}
                                 priorityStatus={auth.employee.priority_status}
                                 dailyEntry={dailyEntry}
+                                reservationsOpen={reservationsOpen}
                             />
                         ))}
                     </div>

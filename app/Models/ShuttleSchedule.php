@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RecordsUserActivity;
 use Database\Factories\ShuttleScheduleFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class ShuttleSchedule extends Model
 {
     /** @use HasFactory<ShuttleScheduleFactory> */
-    use HasFactory;
+    use HasFactory, RecordsUserActivity;
 
     /** @var list<string> */
     protected $fillable = [
@@ -24,6 +25,22 @@ class ShuttleSchedule extends Model
     protected $attributes = [
         'waitlist_enabled' => true,
     ];
+
+    /**
+     * A schedule has no name of its own, so the trail identifies it the way the
+     * roster does: route, direction and departure time.
+     */
+    public function userLogLabel(): string
+    {
+        $routeName = $this->route?->name ?? 'Unassigned route';
+
+        return sprintf(
+            '%s · %s %s',
+            $routeName,
+            ucfirst(mb_strtolower((string) $this->direction)),
+            mb_substr((string) $this->departure_time, 0, 5),
+        );
+    }
 
     /** @return array<string, string> */
     protected function casts(): array

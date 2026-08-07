@@ -14,6 +14,7 @@ import {
     ClipboardCheck,
     ClipboardList,
     ContactRound,
+    History,
     LayoutGrid,
     LayoutList,
     Route,
@@ -80,6 +81,16 @@ const mainNavGroups: NavGroup[] = [
                 title: 'Drivers',
                 url: '/admin/drivers',
                 icon: UserRound,
+            },
+        ],
+    },
+    {
+        title: 'Audit Trail',
+        items: [
+            {
+                title: 'User Logs',
+                url: '/admin/user-logs',
+                icon: History,
             },
         ],
     },

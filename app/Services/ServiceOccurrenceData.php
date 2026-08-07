@@ -8,8 +8,6 @@ use App\Models\ShuttleServiceOccurrence;
 
 class ServiceOccurrenceData
 {
-    public function __construct(private ShuttleServiceCloseoutService $closeoutService) {}
-
     /** @return array<string, mixed> */
     public function summary(ShuttleServiceOccurrence $occurrence): array
     {
@@ -109,12 +107,9 @@ class ServiceOccurrenceData
             ->orderBy('seat_number')
             ->get();
         $attendanceByEmployee = $attendances->keyBy('employee_id_snapshot');
-        $openingOdometer = $this->closeoutService->openingOdometer($occurrence);
 
         return [
             ...$this->summary($occurrence),
-            'opening_odometer_prefill' => $openingOdometer,
-            'suggested_opening_odometer_km' => $openingOdometer,
             'reservations' => $reservations
                 ->map(function (ShuttleReservation $reservation) use ($attendanceByEmployee): array {
                     $attendance = $attendanceByEmployee->get($reservation->employee_id);

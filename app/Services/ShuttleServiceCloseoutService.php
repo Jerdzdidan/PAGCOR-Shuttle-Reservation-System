@@ -21,41 +21,6 @@ use Illuminate\Validation\ValidationException;
 
 class ShuttleServiceCloseoutService
 {
-    public function openingOdometer(ShuttleServiceOccurrence $occurrence): ?string
-    {
-        if ($occurrence->opening_odometer_km !== null) {
-            return $occurrence->opening_odometer_km;
-        }
-
-        if ($occurrence->vehicle_id === null) {
-            return null;
-        }
-
-        $previousReading = ShuttleServiceOccurrence::query()
-            ->where('vehicle_id', $occurrence->vehicle_id)
-            ->where('status', ServiceOccurrenceStatus::Completed)
-            ->where('scheduled_departure_at', '<', $occurrence->scheduled_departure_at)
-            ->whereNotNull('closing_odometer_km')
-            ->latest('scheduled_departure_at')
-            ->value('closing_odometer_km');
-
-        if ($previousReading !== null) {
-            return number_format((float) $previousReading, 1, '.', '');
-        }
-
-        $nextOpeningReading = ShuttleServiceOccurrence::query()
-            ->where('vehicle_id', $occurrence->vehicle_id)
-            ->where('status', ServiceOccurrenceStatus::Completed)
-            ->where('scheduled_departure_at', '>', $occurrence->scheduled_departure_at)
-            ->whereNotNull('opening_odometer_km')
-            ->oldest('scheduled_departure_at')
-            ->value('opening_odometer_km');
-
-        return $nextOpeningReading === null
-            ? null
-            : number_format((float) $nextOpeningReading, 1, '.', '');
-    }
-
     /**
      * @param  array<string, mixed>  $data
      */
@@ -70,11 +35,7 @@ class ShuttleServiceCloseoutService
             $openingOdometer = (float) $data['opening_odometer_km'];
             $closingOdometer = (float) $data['closing_odometer_km'];
 
-            $this->validateOdometers(
-                $lockedOccurrence,
-                $openingOdometer,
-                $closingOdometer
-            );
+            $this->validateOdometers($openingOdometer, $closingOdometer);
             $this->validateActualTimes($data);
 
             $reservations = $this->reservationsFor($lockedOccurrence);
@@ -229,11 +190,7 @@ class ShuttleServiceCloseoutService
                     ?? $lockedOccurrence->closing_odometer_km
                 );
 
-                $this->validateOdometers(
-                    $lockedOccurrence,
-                    $openingOdometer,
-                    $closingOdometer
-                );
+                $this->validateOdometers($openingOdometer, $closingOdometer);
 
                 $updates['opening_odometer_km'] = $openingOdometer;
                 $updates['closing_odometer_km'] = $closingOdometer;
@@ -621,48 +578,18 @@ class ShuttleServiceCloseoutService
             ->count();
     }
 
+    /**
+     * Readings are only checked against each other. Administrators enter what the
+     * trip ticket says, so a run is never blocked by what other services recorded
+     * for the same vehicle.
+     */
     private function validateOdometers(
-        ShuttleServiceOccurrence $occurrence,
         float $openingOdometer,
         float $closingOdometer,
     ): void {
         if ($closingOdometer < $openingOdometer) {
             throw ValidationException::withMessages([
                 'closing_odometer_km' => 'The closing odometer must be at least the opening odometer.',
-            ]);
-        }
-
-        if ($occurrence->vehicle_id === null) {
-            return;
-        }
-
-        $previousClosing = ShuttleServiceOccurrence::query()
-            ->whereKeyNot($occurrence->getKey())
-            ->where('vehicle_id', $occurrence->vehicle_id)
-            ->where('status', ServiceOccurrenceStatus::Completed)
-            ->where('scheduled_departure_at', '<', $occurrence->scheduled_departure_at)
-            ->whereNotNull('closing_odometer_km')
-            ->latest('scheduled_departure_at')
-            ->value('closing_odometer_km');
-
-        if ($previousClosing !== null && $openingOdometer < (float) $previousClosing) {
-            throw ValidationException::withMessages([
-                'opening_odometer_km' => 'The opening odometer cannot be lower than the preceding completed service.',
-            ]);
-        }
-
-        $nextOpening = ShuttleServiceOccurrence::query()
-            ->whereKeyNot($occurrence->getKey())
-            ->where('vehicle_id', $occurrence->vehicle_id)
-            ->where('status', ServiceOccurrenceStatus::Completed)
-            ->where('scheduled_departure_at', '>', $occurrence->scheduled_departure_at)
-            ->whereNotNull('opening_odometer_km')
-            ->oldest('scheduled_departure_at')
-            ->value('opening_odometer_km');
-
-        if ($nextOpening !== null && $closingOdometer > (float) $nextOpening) {
-            throw ValidationException::withMessages([
-                'closing_odometer_km' => 'The closing odometer cannot exceed the next completed service’s opening reading.',
             ]);
         }
     }

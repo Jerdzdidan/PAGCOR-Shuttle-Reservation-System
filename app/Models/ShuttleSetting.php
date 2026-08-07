@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RecordsUserActivity;
 use Illuminate\Database\Eloquent\Model;
 
 class ShuttleSetting extends Model
 {
+    use RecordsUserActivity;
+
     public const DEFAULT_BOOKING_WINDOW_ENABLED = true;
 
     public const DEFAULT_BOOKING_WINDOW_OPENS_AT = '09:00:00';
@@ -32,6 +35,11 @@ class ShuttleSetting extends Model
     public static function current(): self
     {
         return static::query()->firstOrCreate([]);
+    }
+
+    public function userLogLabel(): string
+    {
+        return 'Employee booking window';
     }
 
     /** @return array<string, string> */

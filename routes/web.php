@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\ServiceCloseoutController;
 use App\Http\Controllers\Admin\ShuttleRouteController;
 use App\Http\Controllers\Admin\ShuttleScheduleController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\UserLogController;
 use App\Http\Controllers\Admin\VehicleController;
 use App\Http\Controllers\Employee\Auth\AuthenticatedSessionController as EmployeeAuthenticatedSessionController;
 use App\Http\Controllers\Employee\DashboardController as EmployeeDashboardController;
@@ -29,6 +30,7 @@ Route::middleware(['auth', 'admin'])
     ->name('dashboard');
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('user-logs', [UserLogController::class, 'index'])->name('user_logs.index');
     Route::resource('users', UserController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::post('employees/import', [EmployeeController::class, 'import'])->name('employees.import');
     Route::post('employees/{employee}/deactivate', [EmployeeController::class, 'deactivate'])->name('employees.deactivate');

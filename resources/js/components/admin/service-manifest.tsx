@@ -4,11 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { router } from '@inertiajs/react';
 import { CheckCheck, CircleAlert, LoaderCircle, Search, ShieldCheck, Undo2, UserCheck, UsersRound } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { QrAttendanceScanner } from './qr-attendance-scanner';
+import { recordAttendance } from './service-attendance-requests';
 import {
     manifestEmployeeDepartment,
     manifestEmployeeIdentifier,
@@ -23,7 +23,8 @@ import { AttendanceStatusBadge } from './service-status-badge';
 
 interface ServiceManifestProps {
     occurrence: ServiceOccurrence;
-    onRefresh: () => void;
+    /** Receives the refreshed occurrence so the sheet updates without a page visit. */
+    onRefresh: (occurrence?: ServiceOccurrence) => void;
 }
 
 function reservationId(entry: ReturnType<typeof manifestEntries>[number]): number | null {
@@ -79,7 +80,7 @@ export function ServiceManifest({ occurrence, onRefresh }: ServiceManifestProps)
         );
     }, [entries, search]);
 
-    function updateAttendance(entry: (typeof entries)[number], status: 'BOARDED' | 'UNMARKED'): void {
+    async function updateAttendance(entry: (typeof entries)[number], status: 'BOARDED' | 'UNMARKED'): Promise<void> {
         const id = reservationId(entry);
 
         if (!id) {
@@ -87,43 +88,38 @@ export function ServiceManifest({ occurrence, onRefresh }: ServiceManifestProps)
             return;
         }
 
-        router.patch(
-            `/admin/finished-services/${occurrence.id}/attendance/${id}`,
-            { status },
-            {
-                preserveScroll: true,
-                onStart: () => setUpdatingReservationId(id),
-                onSuccess: () => {
-                    toast.success(status === 'BOARDED' ? 'Passenger marked as boarded.' : 'Passenger returned to unmarked.');
-                    onRefresh();
-                },
-                onError: (errors) => {
-                    const message = Object.values(errors)[0];
-                    toast.error(typeof message === 'string' ? message : 'Attendance could not be updated.');
-                },
-                onFinish: () => setUpdatingReservationId(null),
-            },
-        );
+        setUpdatingReservationId(id);
+
+        try {
+            const { occurrence: updated } = await recordAttendance(
+                `/admin/finished-services/${occurrence.id}/attendance/${id}`,
+                'PATCH',
+                { status },
+            );
+            toast.success(status === 'BOARDED' ? 'Passenger marked as boarded.' : 'Passenger returned to unmarked.');
+            onRefresh(updated);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Attendance could not be updated.');
+        } finally {
+            setUpdatingReservationId(null);
+        }
     }
 
-    function markAllBoarded(): void {
-        router.post(
-            `/admin/finished-services/${occurrence.id}/attendance/mark-all`,
-            {},
-            {
-                preserveScroll: true,
-                onStart: () => setMarkingAll(true),
-                onSuccess: () => {
-                    toast.success('All reserved passengers were marked as boarded.');
-                    onRefresh();
-                },
-                onError: (errors) => {
-                    const message = Object.values(errors)[0];
-                    toast.error(typeof message === 'string' ? message : 'The manifest could not be updated.');
-                },
-                onFinish: () => setMarkingAll(false),
-            },
-        );
+    async function markAllBoarded(): Promise<void> {
+        setMarkingAll(true);
+
+        try {
+            const { occurrence: updated } = await recordAttendance(
+                `/admin/finished-services/${occurrence.id}/attendance/mark-all`,
+                'POST',
+            );
+            toast.success('All reserved passengers were marked as boarded.');
+            onRefresh(updated);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'The manifest could not be updated.');
+        } finally {
+            setMarkingAll(false);
+        }
     }
 
     return (
@@ -194,7 +190,7 @@ export function ServiceManifest({ occurrence, onRefresh }: ServiceManifestProps)
                         <p className="text-muted-foreground mt-1 text-xs">Only employees with a reservation for this service can be boarded.</p>
                     </div>
                     {editable && entries.length > 0 && (
-                        <Button type="button" variant="outline" size="sm" disabled={markingAll || pendingCount === 0} onClick={markAllBoarded}>
+                        <Button type="button" variant="outline" size="sm" disabled={markingAll || pendingCount === 0} onClick={() => void markAllBoarded()}>
                             {markingAll ? <LoaderCircle className="animate-spin" /> : <CheckCheck />}
                             Mark all boarded
                         </Button>
@@ -252,9 +248,9 @@ export function ServiceManifest({ occurrence, onRefresh }: ServiceManifestProps)
                                                             {manifestEmployeePriority(entry) === 'PRIORITY' && (
                                                                 <Badge
                                                                     variant="outline"
-                                                                    className="border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950"
+                                                                    className="gap-1 border-amber-200 bg-amber-50 px-1.5 py-0 text-[0.65rem] whitespace-nowrap text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
                                                                 >
-                                                                    <ShieldCheck />
+                                                                    <ShieldCheck className="size-3" />
                                                                     Priority
                                                                 </Badge>
                                                             )}
@@ -284,7 +280,7 @@ export function ServiceManifest({ occurrence, onRefresh }: ServiceManifestProps)
                                                                     variant="ghost"
                                                                     size="sm"
                                                                     disabled={isUpdating}
-                                                                    onClick={() => updateAttendance(entry, 'UNMARKED')}
+                                                                    onClick={() => void updateAttendance(entry, 'UNMARKED')}
                                                                 >
                                                                     {isUpdating ? <LoaderCircle className="animate-spin" /> : <Undo2 />}
                                                                     Unmark
@@ -295,7 +291,7 @@ export function ServiceManifest({ occurrence, onRefresh }: ServiceManifestProps)
                                                                     variant="outline"
                                                                     size="sm"
                                                                     disabled={isUpdating}
-                                                                    onClick={() => updateAttendance(entry, 'BOARDED')}
+                                                                    onClick={() => void updateAttendance(entry, 'BOARDED')}
                                                                 >
                                                                     {isUpdating ? <LoaderCircle className="animate-spin" /> : <UserCheck />}
                                                                     Boarded
@@ -322,7 +318,10 @@ export function ServiceManifest({ occurrence, onRefresh }: ServiceManifestProps)
                                                     <div className="flex flex-wrap items-center gap-2">
                                                         <p className="font-semibold">{manifestEmployeeName(entry)}</p>
                                                         {manifestEmployeePriority(entry) === 'PRIORITY' && (
-                                                            <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="border-amber-200 bg-amber-50 px-1.5 py-0 text-[0.65rem] whitespace-nowrap text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
+                                                            >
                                                                 Priority
                                                             </Badge>
                                                         )}
@@ -341,7 +340,7 @@ export function ServiceManifest({ occurrence, onRefresh }: ServiceManifestProps)
                                                     size="sm"
                                                     className="mt-3 w-full"
                                                     disabled={isUpdating}
-                                                    onClick={() => updateAttendance(entry, status === 'BOARDED' ? 'UNMARKED' : 'BOARDED')}
+                                                    onClick={() => void updateAttendance(entry, status === 'BOARDED' ? 'UNMARKED' : 'BOARDED')}
                                                 >
                                                     {isUpdating ? (
                                                         <LoaderCircle className="animate-spin" />

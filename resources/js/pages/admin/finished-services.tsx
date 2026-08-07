@@ -179,6 +179,8 @@ export default function FinishedServicesPage({
     const [detailLoading, setDetailLoading] = useState(initialOccurrenceId !== null && !selectedOccurrence);
     const [detailError, setDetailError] = useState<string>();
     const detailRequestId = useRef(0);
+    /** Attendance changes are applied to the sheet alone; the table catches up on close. */
+    const listNeedsRefresh = useRef(false);
     const [dateFrom, setDateFrom] = useState(filters.date_from ?? '');
     const [dateTo, setDateTo] = useState(filters.date_to ?? '');
     const [routeId, setRouteId] = useState(filters.route_id ? String(filters.route_id) : 'ALL');
@@ -264,7 +266,21 @@ export default function FinishedServicesPage({
         void loadDetail(id);
     }
 
-    function reloadDetail(): void {
+    /**
+     * Attendance endpoints hand back the refreshed occurrence, so the sheet can be
+     * updated in place. Only fall back to a round trip when nothing was supplied.
+     */
+    function reloadDetail(updated?: ServiceOccurrence): void {
+        if (updated) {
+            detailRequestId.current += 1;
+            setDetail(updated);
+            setDetailError(undefined);
+            setDetailLoading(false);
+            listNeedsRefresh.current = true;
+
+            return;
+        }
+
         if (selectedId) {
             void loadDetail(selectedId);
         }
@@ -558,6 +574,11 @@ export default function FinishedServicesPage({
                         setSelectedId(null);
                         setDetail(undefined);
                         setDetailError(undefined);
+
+                        if (listNeedsRefresh.current) {
+                            listNeedsRefresh.current = false;
+                            router.reload({ only: ['occurrences', 'summary', 'pending_completion_count'] });
+                        }
                     }
                 }}
                 onReloadDetail={reloadDetail}

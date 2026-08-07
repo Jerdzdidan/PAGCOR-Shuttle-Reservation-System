@@ -50,7 +50,8 @@ interface ServiceDetailSheetProps {
     loading?: boolean;
     error?: string;
     onOpenChange: (open: boolean) => void;
-    onReloadDetail: () => void;
+    /** Called with the refreshed occurrence when the server already returned it. */
+    onReloadDetail: (occurrence?: ServiceOccurrence) => void;
     onFinalized: () => void;
 }
 
@@ -218,7 +219,7 @@ export function ServiceDetailSheet({ open, occurrence, loading = false, error, o
                                 <AlertTitle>Service details could not be loaded</AlertTitle>
                                 <AlertDescription className="mt-2 flex flex-col items-start gap-3">
                                     <span>{error}</span>
-                                    <Button type="button" variant="outline" size="sm" onClick={onReloadDetail}>
+                                    <Button type="button" variant="outline" size="sm" onClick={() => onReloadDetail()}>
                                         <RotateCcw />
                                         Try again
                                     </Button>
@@ -245,7 +246,7 @@ function ServiceDetailPanel({
     onFinalized,
 }: {
     occurrence: ServiceOccurrence;
-    onReloadDetail: () => void;
+    onReloadDetail: (occurrence?: ServiceOccurrence) => void;
     onFinalized: () => void;
 }) {
     const isFinalized = occurrence.status === 'COMPLETED' || occurrence.status === 'NOT_OPERATED';
@@ -349,9 +350,7 @@ function ServiceCloseout({ occurrence, onFinalized }: { occurrence: ServiceOccur
     const [outcome, setOutcome] = useState<'COMPLETED' | 'NOT_OPERATED'>('COMPLETED');
     const [confirmed, setConfirmed] = useState(false);
     const completeForm = useForm<CompleteFormData>({
-        opening_odometer_km: numberValue(
-            occurrence.opening_odometer_km ?? occurrence.suggested_opening_odometer_km ?? occurrence.opening_odometer_prefill,
-        ),
+        opening_odometer_km: numberValue(occurrence.opening_odometer_km),
         closing_odometer_km: numberValue(occurrence.closing_odometer_km),
         actual_departure_at: datetimeLocalValue(occurrence.actual_departure_at),
         actual_arrival_at: datetimeLocalValue(occurrence.actual_arrival_at),
@@ -632,7 +631,7 @@ function FinalizedServiceRecord({
     onFinalized,
 }: {
     occurrence: ServiceOccurrence;
-    onReloadDetail: () => void;
+    onReloadDetail: (occurrence?: ServiceOccurrence) => void;
     onFinalized: () => void;
 }) {
     const [editing, setEditing] = useState(false);

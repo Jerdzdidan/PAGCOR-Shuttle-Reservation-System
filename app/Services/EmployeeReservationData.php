@@ -285,6 +285,8 @@ class EmployeeReservationData
                 'startsOn' => $today->toDateString(),
                 'endsOn' => $lastBookingDate->toDateString(),
             ],
+            /* Later dates stay browsable, but seats are only handed out on the day of travel. */
+            'reservationsOpen' => $selectedDate->equalTo($today),
             'dailyEntry' => $this->dailyEntry($employee, $selectedDate),
             'operating_timezone' => $this->operatingTimezone(),
         ];

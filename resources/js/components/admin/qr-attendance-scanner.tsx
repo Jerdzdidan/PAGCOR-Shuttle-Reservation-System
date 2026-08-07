@@ -3,11 +3,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { router } from '@inertiajs/react';
 import { BrowserQRCodeReader, type IScannerControls } from '@zxing/browser';
 import { Camera, IdCard, ImageUp, Keyboard, LoaderCircle, LockKeyhole, RotateCcw, ScanLine } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { toast } from 'sonner';
+import { recordAttendance } from './service-attendance-requests';
+import { type ServiceOccurrence } from './service-operation-types';
 
 type ScannerMode = 'camera' | 'upload' | 'handheld' | 'employee_id';
 
@@ -21,7 +22,7 @@ const scannerModes: Array<{ value: ScannerMode; label: string; icon: typeof Came
 interface QrAttendanceScannerProps {
     occurrenceId: number;
     disabled?: boolean;
-    onRecorded?: () => void;
+    onRecorded?: (occurrence: ServiceOccurrence) => void;
 }
 
 function normalizedCredential(value: string): string | null {
@@ -80,27 +81,21 @@ export function QrAttendanceScanner({ occurrenceId, disabled = false, onRecorded
             setCameraActive(false);
             setScanError(undefined);
 
-            router.post(
-                `/admin/finished-services/${occurrenceId}/attendance/scan`,
-                { credential },
-                {
-                    preserveScroll: true,
-                    onStart: () => setProcessing(true),
-                    onSuccess: () => {
-                        setScannerValue('');
-                        toast.success('Passenger marked as boarded.');
-                        onRecorded?.();
-                    },
-                    onError: (errors) => {
-                        const message = Object.values(errors)[0];
-                        setScanError(typeof message === 'string' ? message : 'The passenger could not be boarded with this QR code.');
-                    },
-                    onFinish: () => {
-                        setProcessing(false);
-                        processedRef.current = false;
-                    },
-                },
-            );
+            setProcessing(true);
+
+            void recordAttendance(`/admin/finished-services/${occurrenceId}/attendance/scan`, 'POST', { credential })
+                .then(({ occurrence }) => {
+                    setScannerValue('');
+                    toast.success('Passenger marked as boarded.');
+                    onRecorded?.(occurrence);
+                })
+                .catch((error: unknown) => {
+                    setScanError(error instanceof Error ? error.message : 'The passenger could not be boarded with this QR code.');
+                })
+                .finally(() => {
+                    setProcessing(false);
+                    processedRef.current = false;
+                });
         },
         [disabled, occurrenceId, onRecorded],
     );
@@ -200,28 +195,25 @@ export function QrAttendanceScanner({ occurrenceId, disabled = false, onRecorded
         setScanError(undefined);
     }
 
-    function submitEmployeeCode(event: FormEvent<HTMLFormElement>): void {
+    async function submitEmployeeCode(event: FormEvent<HTMLFormElement>): Promise<void> {
         event.preventDefault();
         setScanError(undefined);
+        setProcessing(true);
 
-        router.post(
-            `/admin/finished-services/${occurrenceId}/attendance/employee-code`,
-            { employee_code: employeeCode },
-            {
-                preserveScroll: true,
-                onStart: () => setProcessing(true),
-                onSuccess: () => {
-                    setEmployeeCode('');
-                    toast.success('Passenger marked as boarded.');
-                    onRecorded?.();
-                },
-                onError: (errors) => {
-                    const message = Object.values(errors)[0];
-                    setScanError(typeof message === 'string' ? message : 'The passenger could not be boarded with this employee ID.');
-                },
-                onFinish: () => setProcessing(false),
-            },
-        );
+        try {
+            const { occurrence } = await recordAttendance(
+                `/admin/finished-services/${occurrenceId}/attendance/employee-code`,
+                'POST',
+                { employee_code: employeeCode },
+            );
+            setEmployeeCode('');
+            toast.success('Passenger marked as boarded.');
+            onRecorded?.(occurrence);
+        } catch (error) {
+            setScanError(error instanceof Error ? error.message : 'The passenger could not be boarded with this employee ID.');
+        } finally {
+            setProcessing(false);
+        }
     }
 
     return (
@@ -344,7 +336,7 @@ export function QrAttendanceScanner({ occurrenceId, disabled = false, onRecorded
             )}
 
             {mode === 'employee_id' && (
-                <form onSubmit={submitEmployeeCode} className="bg-muted/20 space-y-3 rounded-2xl border p-4">
+                <form onSubmit={(event) => void submitEmployeeCode(event)} className="bg-muted/20 space-y-3 rounded-2xl border p-4">
                     <div className="flex items-center gap-2">
                         <IdCard className="text-primary size-5" />
                         <div>

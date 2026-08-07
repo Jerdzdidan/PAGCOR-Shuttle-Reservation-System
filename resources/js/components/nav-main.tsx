@@ -33,7 +33,9 @@ function NavLinks({ items, currentPath }: { items: NavItem[]; currentPath: strin
                     {item.badge !== null && item.badge !== undefined && (
                         <SidebarMenuBadge
                             aria-label={`${item.badge} services need completion`}
-                            className="top-1.5 bg-amber-100 font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+                            // The badge keeps its amber text on hover and while active; the sidebar
+                            // default would flip it to the accent foreground and lose all contrast.
+                            className="top-1.5 bg-amber-100 font-semibold text-amber-900 peer-hover/menu-button:text-amber-900 peer-data-[active=true]/menu-button:text-amber-900 dark:bg-amber-950 dark:text-amber-200 dark:peer-hover/menu-button:text-amber-200 dark:peer-data-[active=true]/menu-button:text-amber-200"
                         >
                             {item.badge}
                         </SidebarMenuBadge>

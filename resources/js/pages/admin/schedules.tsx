@@ -569,25 +569,29 @@ export default function SchedulesPage({
                         <h1 className="text-2xl font-semibold tracking-tight">Schedule management</h1>
                         <p className="text-muted-foreground">Configure reusable schedules or inspect live trip occurrences in {operatingTimezone}.</p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <ToggleGroup
-                            type="single"
-                            value={viewMode}
-                            onValueChange={(value) => value && setViewMode(value as ViewMode)}
-                            variant="outline"
-                            aria-label="Schedule view"
-                            className="rounded-md border p-0.5"
-                        >
-                            <ToggleGroupItem value="table" aria-label="Table view" className="gap-2 px-3">
-                                <Table2 />
-                                <span className="hidden sm:inline">Table</span>
-                            </ToggleGroupItem>
-                            <ToggleGroupItem value="grid" aria-label="Grid view" className="gap-2 px-3">
-                                <LayoutGrid />
-                                <span className="hidden sm:inline">Grid</span>
-                            </ToggleGroupItem>
-                        </ToggleGroup>
-                        <BookingWindowDialog bookingWindow={bookingWindow} operatingTimezone={operatingTimezone} />
+                    {/* The primary action keeps its own row so it never wraps under
+                        the view switcher at an awkward width. */}
+                    <div className="flex flex-col items-stretch gap-2 sm:items-start lg:items-end">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <ToggleGroup
+                                type="single"
+                                value={viewMode}
+                                onValueChange={(value) => value && setViewMode(value as ViewMode)}
+                                variant="outline"
+                                aria-label="Schedule view"
+                                className="rounded-md border p-0.5"
+                            >
+                                <ToggleGroupItem value="table" aria-label="Table view" className="gap-2 px-3">
+                                    <Table2 />
+                                    <span className="hidden sm:inline">Table</span>
+                                </ToggleGroupItem>
+                                <ToggleGroupItem value="grid" aria-label="Grid view" className="gap-2 px-3">
+                                    <LayoutGrid />
+                                    <span className="hidden sm:inline">Grid</span>
+                                </ToggleGroupItem>
+                            </ToggleGroup>
+                            <BookingWindowDialog bookingWindow={bookingWindow} operatingTimezone={operatingTimezone} />
+                        </div>
                         <Button onClick={openCreate}>
                             <Plus />
                             Add schedule
