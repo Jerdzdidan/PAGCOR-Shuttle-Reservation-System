@@ -460,6 +460,19 @@ export default function SchedulesPage({
         }
     }
 
+    function openDelete(schedule: ManagedSchedule): void {
+        deleteForm.clearErrors();
+        setDeletingSchedule(schedule);
+    }
+
+    function openDeleteById(scheduleId: number): void {
+        const schedule = schedules.find((candidate) => candidate.id === scheduleId);
+
+        if (schedule) {
+            openDelete(schedule);
+        }
+    }
+
     function confirmDelete(): void {
         if (!deletingSchedule) {
             return;
@@ -470,6 +483,10 @@ export default function SchedulesPage({
             onSuccess: () => {
                 setDeletingSchedule(null);
                 toast.success('Schedule deleted successfully.');
+            },
+            onError: (errors) => {
+                const message = Object.values(errors)[0];
+                toast.error(typeof message === 'string' ? message : 'This schedule could not be deleted.');
             },
         });
     }
@@ -587,7 +604,7 @@ export default function SchedulesPage({
                             `${schedule.route?.name} ${schedule.vehicle?.plate_number} ${schedule.driver?.name} ${schedule.direction} ${schedule.status} ${schedule.operating_days.join(' ')} ${schedule.waitlist_enabled ? 'waitlist enabled' : 'waitlist disabled'}`
                         }
                         onEdit={openEdit}
-                        onDelete={setDeletingSchedule}
+                        onDelete={openDelete}
                         filterOptions={[
                             { value: 'ALL', label: 'All statuses' },
                             { value: 'ACTIVE', label: 'Active' },
@@ -602,6 +619,7 @@ export default function SchedulesPage({
                         operatingTimezone={operatingTimezone}
                         onDateChange={changeDate}
                         onConfigure={openEditById}
+                        onDelete={openDeleteById}
                     />
                 )}
             </div>
@@ -879,14 +897,28 @@ export default function SchedulesPage({
             <Dialog open={Boolean(deletingSchedule)} onOpenChange={(open) => !open && setDeletingSchedule(null)}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Delete schedule?</DialogTitle>
+                        <DialogTitle>Delete this schedule?</DialogTitle>
                         <DialogDescription>
-                            This permanently removes the reusable schedule template for {deletingSchedule?.route?.name}.
+                            {deletingSchedule
+                                ? `${deletingSchedule.route?.name ?? 'This route'} · ${displayClockTime(deletingSchedule.departure_time)} · ${
+                                      deletingSchedule.direction === 'RETURN' ? 'Return' : 'Outbound'
+                                  }`
+                                : ''}
                         </DialogDescription>
                     </DialogHeader>
-                    {deleteForm.errors.schedule && <p className="text-destructive text-sm">{deleteForm.errors.schedule}</p>}
+                    <div className="text-muted-foreground space-y-2 text-sm leading-6">
+                        <p>
+                            The recurring schedule stops being offered to employees and no further services are generated from it. Completed and
+                            not-operated services stay in reporting with their own route, vehicle, and driver details.
+                        </p>
+                        <p>
+                            A schedule with existing reservations or waitlist entries cannot be deleted &mdash; cancel those first, or set the
+                            schedule to inactive instead.
+                        </p>
+                    </div>
+                    {deleteForm.errors.schedule && <p className="text-destructive text-sm font-medium">{deleteForm.errors.schedule}</p>}
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setDeletingSchedule(null)}>
+                        <Button variant="outline" onClick={() => setDeletingSchedule(null)} disabled={deleteForm.processing}>
                             Cancel
                         </Button>
                         <Button variant="destructive" onClick={confirmDelete} disabled={deleteForm.processing}>

@@ -18,6 +18,7 @@ import {
     ScanLine,
     Settings2,
     ShieldCheck,
+    Trash2,
     UserRound,
     UsersRound,
     X,
@@ -92,6 +93,7 @@ interface ScheduleOperationsGridProps {
     operatingTimezone: string;
     onDateChange: (date: string) => void;
     onConfigure: (scheduleId: number) => void;
+    onDelete: (scheduleId: number) => void;
 }
 
 function displayTime(time: string): string {
@@ -494,7 +496,17 @@ function OccurrenceDetail({
     );
 }
 
-function OccurrenceCard({ occurrence, onView, onConfigure }: { occurrence: ScheduleOccurrence; onView: () => void; onConfigure: () => void }) {
+function OccurrenceCard({
+    occurrence,
+    onView,
+    onConfigure,
+    onDelete,
+}: {
+    occurrence: ScheduleOccurrence;
+    onView: () => void;
+    onConfigure: () => void;
+    onDelete: () => void;
+}) {
     const [origin, destination] = routeEndpoints(occurrence);
     const occupancyPercentage =
         occurrence.usable_seat_count > 0 ? Math.min(100, Math.round((occurrence.reserved_count / occurrence.usable_seat_count) * 100)) : 100;
@@ -614,16 +626,36 @@ function OccurrenceCard({ occurrence, onView, onConfigure }: { occurrence: Sched
                     <UserRound />
                     View seats &amp; manifest
                 </Button>
-                <Button type="button" variant="ghost" onClick={onConfigure}>
-                    <Settings2 />
-                    Configure
-                </Button>
+                <div className="flex items-center gap-1">
+                    <Button type="button" variant="ghost" onClick={onConfigure}>
+                        <Settings2 />
+                        Configure
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Delete schedule"
+                        title="Delete schedule"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={onDelete}
+                    >
+                        <Trash2 />
+                    </Button>
+                </div>
             </CardFooter>
         </Card>
     );
 }
 
-export function ScheduleOperationsGrid({ selectedDate, occurrences, operatingTimezone, onDateChange, onConfigure }: ScheduleOperationsGridProps) {
+export function ScheduleOperationsGrid({
+    selectedDate,
+    occurrences,
+    operatingTimezone,
+    onDateChange,
+    onConfigure,
+    onDelete,
+}: ScheduleOperationsGridProps) {
     const [routeFilter, setRouteFilter] = useState('ALL');
     const [directionFilter, setDirectionFilter] = useState('ALL');
     const [activityFilter, setActivityFilter] = useState<ActivityFilter>('ALL');
@@ -777,6 +809,7 @@ export function ScheduleOperationsGrid({ selectedDate, occurrences, operatingTim
                             occurrence={occurrence}
                             onView={() => setViewingOccurrenceId(occurrence.id)}
                             onConfigure={() => onConfigure(occurrence.id)}
+                            onDelete={() => onDelete(occurrence.id)}
                         />
                     ))}
                 </div>

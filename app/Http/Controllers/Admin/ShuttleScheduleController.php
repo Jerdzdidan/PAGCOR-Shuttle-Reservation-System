@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\ServiceOccurrenceStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\BrowseAdminSchedulesRequest;
 use App\Http\Requests\StoreShuttleScheduleRequest;
@@ -10,12 +11,14 @@ use App\Http\Requests\UpdateShuttleScheduleRequest;
 use App\Models\Driver;
 use App\Models\ShuttleRoute;
 use App\Models\ShuttleSchedule;
+use App\Models\ShuttleServiceOccurrence;
 use App\Models\ShuttleSetting;
 use App\Models\Vehicle;
 use App\Services\AdminScheduleData;
 use App\Services\ShuttleSeatPolicy;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -160,22 +163,54 @@ class ShuttleScheduleController extends Controller
     /**
      * Remove the specified resource from storage.
      */
+    /**
+     * Deletes a schedule template. Finalized services keep their own route, vehicle and
+     * driver snapshots, so past history survives the schedule that produced it.
+     */
     public function destroy(ShuttleSchedule $schedule): RedirectResponse
     {
-        if ($schedule->reservations()->exists() || $schedule->waitlistEntries()->exists()) {
+        if ($schedule->reservations()->exists()) {
             throw ValidationException::withMessages([
-                'schedule' => 'This schedule cannot be deleted while reservations or waitlist entries exist.',
+                'schedule' => 'This schedule still has seat reservations. Cancel them before deleting it.',
             ]);
         }
 
-        if ($schedule->serviceOccurrences()->exists()) {
+        if ($schedule->waitlistEntries()->exists()) {
             throw ValidationException::withMessages([
-                'schedule' => 'This schedule has retained service history and cannot be deleted. Mark it inactive instead.',
+                'schedule' => 'This schedule still has waitlist entries. Clear the queue before deleting it.',
             ]);
         }
 
-        $schedule->delete();
+        $retainedServices = DB::transaction(function () use ($schedule): int {
+            // Runs that never recorded anything are just placeholders for a date that has
+            // not happened yet; remove them so they do not linger without a schedule.
+            ShuttleServiceOccurrence::query()
+                ->where('shuttle_schedule_id', $schedule->getKey())
+                ->whereIn('status', [
+                    ServiceOccurrenceStatus::Scheduled,
+                    ServiceOccurrenceStatus::AwaitingCompletion,
+                ])
+                ->whereDoesntHave('attendances')
+                ->delete();
 
-        return to_route('admin.schedules.index')->with('success', 'Schedule deleted successfully.');
+            $retained = ShuttleServiceOccurrence::query()
+                ->where('shuttle_schedule_id', $schedule->getKey())
+                ->count();
+
+            $schedule->delete();
+
+            return $retained;
+        }, 5);
+
+        return to_route('admin.schedules.index')->with(
+            'success',
+            $retainedServices === 0
+                ? 'Schedule deleted successfully.'
+                : sprintf(
+                    'Schedule deleted. %d past service %s kept for reporting.',
+                    $retainedServices,
+                    $retainedServices === 1 ? 'record was' : 'records were',
+                ),
+        );
     }
 }
