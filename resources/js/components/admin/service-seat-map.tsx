@@ -66,13 +66,13 @@ export function ServiceSeatMap({ occurrence }: { occurrence: ServiceOccurrence }
         <div className="grid gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(18rem,1.2fr)]">
             <div className="border-border bg-muted/25 mx-auto w-full max-w-sm rounded-[2.25rem] border-2 p-4 shadow-inner">
                 <div className="mb-4 grid grid-cols-[1fr_1fr_0.45fr_1fr_1fr] items-center gap-2 rounded-t-[1.5rem] border-b bg-blue-50 p-3 dark:bg-blue-950/30">
-                    <div className="col-span-3 flex h-11 items-center justify-center rounded-xl border border-blue-200 bg-blue-100/80 text-xs font-medium tracking-wider text-blue-900 uppercase dark:border-blue-900 dark:bg-blue-950 dark:text-blue-100">
-                        <BusFront className="mr-2 size-4" />
-                        Windshield
-                    </div>
                     <div className="bg-background col-span-2 flex h-11 items-center justify-center gap-2 rounded-xl border text-xs font-medium">
                         <CircleGauge className="size-4" />
                         Driver
+                    </div>
+                    <div className="col-span-3 flex h-11 items-center justify-center rounded-xl border border-blue-200 bg-blue-100/80 text-xs font-medium tracking-wider text-blue-900 uppercase dark:border-blue-900 dark:bg-blue-950 dark:text-blue-100">
+                        <BusFront className="mr-2 size-4" />
+                        Windshield
                     </div>
                 </div>
 

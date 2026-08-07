@@ -285,7 +285,50 @@ class EmployeeReservationData
                 'startsOn' => $today->toDateString(),
                 'endsOn' => $lastBookingDate->toDateString(),
             ],
+            'dailyEntry' => $this->dailyEntry($employee, $selectedDate),
             'operating_timezone' => $this->operatingTimezone(),
+        ];
+    }
+
+    /**
+     * The single reservation or waitlist entry the employee already holds for the
+     * selected date, if any. Only one schedule per day can be booked.
+     *
+     * @return array{type: string, schedule_id: int, route_name: string, departure_time: string}|null
+     */
+    private function dailyEntry(Employee $employee, CarbonImmutable $selectedDate): ?array
+    {
+        $reservation = ShuttleReservation::query()
+            ->with('schedule.route:id,name')
+            ->where('employee_id', $employee->getKey())
+            ->whereDate('travel_date', $selectedDate)
+            ->first();
+
+        if ($reservation !== null) {
+            return $this->dailyEntryItem('RESERVATION', $reservation->schedule);
+        }
+
+        $waitlistEntry = ShuttleWaitlistEntry::query()
+            ->with('schedule.route:id,name')
+            ->where('employee_id', $employee->getKey())
+            ->whereDate('travel_date', $selectedDate)
+            ->first();
+
+        if ($waitlistEntry !== null) {
+            return $this->dailyEntryItem('WAITLIST', $waitlistEntry->schedule);
+        }
+
+        return null;
+    }
+
+    /** @return array{type: string, schedule_id: int, route_name: string, departure_time: string} */
+    private function dailyEntryItem(string $type, ShuttleSchedule $schedule): array
+    {
+        return [
+            'type' => $type,
+            'schedule_id' => (int) $schedule->getKey(),
+            'route_name' => (string) $schedule->route?->name,
+            'departure_time' => mb_substr((string) $schedule->departure_time, 0, 5),
         ];
     }
 

@@ -36,7 +36,7 @@ class EmployeeReservationService
             $employee = $this->lockActiveEmployee($employee);
             $seatConfiguration = $occurrence ?? $schedule;
 
-            $this->assertEmployeeHasNoEntry($employee, $schedule, $date);
+            $this->assertEmployeeHasNoDailyEntry($employee, $schedule, $date);
 
             $capacity = $this->seatPolicy->effectiveCapacity($seatConfiguration);
 
@@ -102,6 +102,102 @@ class EmployeeReservationService
         }, 5);
     }
 
+    /**
+     * Move an existing reservation to another seat on the same shuttle occurrence,
+     * without releasing the current seat to the waitlist.
+     */
+    public function changeSeat(
+        Employee $employee,
+        ShuttleReservation $reservation,
+        int $seatNumber,
+    ): ShuttleReservation {
+        return DB::transaction(function () use ($employee, $reservation, $seatNumber): ShuttleReservation {
+            $date = $this->parseTravelDate($reservation->travel_date->toDateString());
+            $schedule = $this->lockSchedule((int) $reservation->shuttle_schedule_id);
+            $occurrence = $this->occurrenceFor($schedule, $date, lock: true);
+            $employee = $this->lockActiveEmployee($employee);
+            $lockedReservation = ShuttleReservation::query()
+                ->whereKey($reservation->getKey())
+                ->where('employee_id', $employee->getKey())
+                ->whereDate('travel_date', $date)
+                ->lockForUpdate()
+                ->first();
+
+            if ($lockedReservation === null) {
+                throw ValidationException::withMessages([
+                    'reservation' => 'This reservation is no longer available.',
+                ]);
+            }
+
+            $this->assertBeforeDeparture($schedule, $date, $occurrence);
+
+            $previousSeat = (int) $lockedReservation->seat_number;
+
+            if ($previousSeat === $seatNumber) {
+                throw ValidationException::withMessages([
+                    'seat_number' => 'You are already seated in this seat. Choose a different one.',
+                ]);
+            }
+
+            $seatConfiguration = $occurrence ?? $schedule;
+            $capacity = $this->seatPolicy->effectiveCapacity($seatConfiguration);
+
+            if ($seatNumber < 1 || $seatNumber > $capacity) {
+                throw ValidationException::withMessages([
+                    'seat_number' => 'The selected seat is outside this shuttle’s capacity.',
+                ]);
+            }
+
+            if ($this->seatPolicy->isUnavailableSeat($seatConfiguration, $seatNumber)) {
+                throw ValidationException::withMessages([
+                    'seat_number' => 'The selected seat is unavailable for this schedule.',
+                ]);
+            }
+
+            if (
+                ! $employee->isPriority()
+                && $this->seatPolicy->isPrioritySeat($seatConfiguration, $seatNumber)
+            ) {
+                throw ValidationException::withMessages([
+                    'seat_number' => 'The selected seat is reserved for priority employees.',
+                ]);
+            }
+
+            $seatIsOccupied = ShuttleReservation::query()
+                ->where('shuttle_schedule_id', $schedule->id)
+                ->whereDate('travel_date', $date)
+                ->where('seat_number', $seatNumber)
+                ->whereKeyNot($lockedReservation->getKey())
+                ->lockForUpdate()
+                ->first(['id']);
+
+            if ($seatIsOccupied !== null) {
+                throw ValidationException::withMessages([
+                    'seat_number' => 'That seat was just reserved. Please choose another available seat.',
+                ]);
+            }
+
+            $lockedReservation->forceFill(['seat_number' => $seatNumber])->save();
+            $this->syncAttendanceSeat($occurrence, $lockedReservation, $seatNumber);
+
+            ShuttleActivityEvent::record(
+                employee: $employee,
+                schedule: $schedule,
+                travelDate: $date,
+                eventType: ShuttleActivityEventType::ReservationSeatChanged,
+                seatNumber: $seatNumber,
+                metadata: [
+                    'reservation_id' => $lockedReservation->id,
+                    'source' => $lockedReservation->source,
+                    'previous_seat_number' => $previousSeat,
+                ],
+                occurrence: $occurrence,
+            );
+
+            return $lockedReservation->refresh();
+        }, 5);
+    }
+
     public function joinWaitlist(
         Employee $employee,
         int $scheduleId,
@@ -113,7 +209,7 @@ class EmployeeReservationService
             $employee = $this->lockActiveEmployee($employee);
             $seatConfiguration = $occurrence ?? $schedule;
 
-            $this->assertEmployeeHasNoEntry($employee, $schedule, $date);
+            $this->assertEmployeeHasNoDailyEntry($employee, $schedule, $date);
 
             if (! $this->waitlistEnabled($schedule, $occurrence)) {
                 throw ValidationException::withMessages([
@@ -455,34 +551,40 @@ class EmployeeReservationService
         }
     }
 
-    private function assertEmployeeHasNoEntry(
+    /**
+     * An employee may hold only one reservation or waitlist entry per travel date,
+     * across every schedule.
+     */
+    private function assertEmployeeHasNoDailyEntry(
         Employee $employee,
         ShuttleSchedule $schedule,
         CarbonImmutable $date,
     ): void {
         $reservation = ShuttleReservation::query()
             ->where('employee_id', $employee->getKey())
-            ->where('shuttle_schedule_id', $schedule->id)
             ->whereDate('travel_date', $date)
             ->lockForUpdate()
-            ->first(['id']);
+            ->first(['id', 'shuttle_schedule_id']);
 
         if ($reservation !== null) {
             throw ValidationException::withMessages([
-                'schedule_id' => 'You already have a reservation for this shuttle occurrence.',
+                'schedule_id' => (int) $reservation->shuttle_schedule_id === (int) $schedule->id
+                    ? 'You already have a reservation for this shuttle occurrence.'
+                    : 'You already have a reservation for another shuttle on this date. Only one schedule per day can be booked.',
             ]);
         }
 
         $waitlistEntry = ShuttleWaitlistEntry::query()
             ->where('employee_id', $employee->getKey())
-            ->where('shuttle_schedule_id', $schedule->id)
             ->whereDate('travel_date', $date)
             ->lockForUpdate()
-            ->first(['id']);
+            ->first(['id', 'shuttle_schedule_id']);
 
         if ($waitlistEntry !== null) {
             throw ValidationException::withMessages([
-                'schedule_id' => 'You are already on the waitlist for this shuttle occurrence.',
+                'schedule_id' => (int) $waitlistEntry->shuttle_schedule_id === (int) $schedule->id
+                    ? 'You are already on the waitlist for this shuttle occurrence.'
+                    : 'You are already on the waitlist for another shuttle on this date. Only one schedule per day can be booked.',
             ]);
         }
     }
@@ -586,6 +688,27 @@ class EmployeeReservationService
             ->get()
             ->each
             ->delete();
+    }
+
+    /**
+     * Keep any attendance snapshot aligned with the seat the employee moved to.
+     */
+    private function syncAttendanceSeat(
+        ?ShuttleServiceOccurrence $occurrence,
+        ShuttleReservation $reservation,
+        int $seatNumber,
+    ): void {
+        if ($occurrence === null || $occurrence->isFinalized()) {
+            return;
+        }
+
+        ShuttleServiceAttendance::query()
+            ->where('shuttle_service_occurrence_id', $occurrence->getKey())
+            ->where('shuttle_reservation_id', $reservation->getKey())
+            ->lockForUpdate()
+            ->get()
+            ->each
+            ->update(['seat_number' => $seatNumber]);
     }
 
     private function refreshOccurrenceCounts(

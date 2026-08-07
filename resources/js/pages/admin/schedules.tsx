@@ -13,7 +13,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePoll } from '@inertiajs/react';
-import { LayoutGrid, Plus, Table2 } from 'lucide-react';
+import { Clock3, LayoutGrid, LoaderCircle, Plus, Table2 } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
 
@@ -76,6 +76,23 @@ type ScheduleFormData = {
     notes: string;
 };
 
+interface BookingWindow {
+    enabled: boolean;
+    opens_at: string;
+    closes_at: string;
+    defaults: {
+        opens_at: string;
+        closes_at: string;
+    };
+}
+
+interface BookingWindowForm {
+    [key: string]: string | boolean;
+    enabled: boolean;
+    opens_at: string;
+    closes_at: string;
+}
+
 interface SchedulesPageProps {
     schedules: ManagedSchedule[];
     routes: ManagedRoute[];
@@ -83,6 +100,7 @@ interface SchedulesPageProps {
     drivers: ManagedDriver[];
     operatingTimezone: string;
     selectedDate: string;
+    bookingWindow: BookingWindow;
     defaultPrioritySeatCount?: number;
     scheduleOccurrences?: ScheduleOccurrence[];
 }
@@ -103,6 +121,136 @@ function today(): string {
     const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
 
     return `${values.year}-${values.month}-${values.day}`;
+}
+
+function displayClockTime(time: string): string {
+    if (!time) {
+        return '—';
+    }
+
+    const [hourValue, minute = '00'] = time.split(':');
+    const hour = Number(hourValue);
+
+    return `${hour % 12 || 12}:${minute} ${hour >= 12 ? 'PM' : 'AM'}`;
+}
+
+function BookingWindowDialog({ bookingWindow, operatingTimezone }: { bookingWindow: BookingWindow; operatingTimezone: string }) {
+    const [open, setOpen] = useState(false);
+    const form = useForm<BookingWindowForm>({
+        enabled: bookingWindow.enabled,
+        opens_at: bookingWindow.opens_at,
+        closes_at: bookingWindow.closes_at,
+    });
+    const spansMidnight = form.data.enabled && form.data.opens_at !== '' && form.data.closes_at !== '' && form.data.closes_at < form.data.opens_at;
+    const defaultBookingWindow = bookingWindow.defaults;
+
+    function openDialog(): void {
+        form.setData({
+            enabled: bookingWindow.enabled,
+            opens_at: bookingWindow.opens_at,
+            closes_at: bookingWindow.closes_at,
+        });
+        form.clearErrors();
+        setOpen(true);
+    }
+
+    function toggleEnabled(enabled: boolean): void {
+        form.setData({
+            enabled,
+            opens_at: enabled && form.data.opens_at === '' ? defaultBookingWindow.opens_at : form.data.opens_at,
+            closes_at: enabled && form.data.closes_at === '' ? defaultBookingWindow.closes_at : form.data.closes_at,
+        });
+    }
+
+    function submit(event: FormEvent<HTMLFormElement>): void {
+        event.preventDefault();
+        form.put('/admin/schedules/booking-window', {
+            preserveScroll: true,
+            onSuccess: () => {
+                setOpen(false);
+                toast.success('Employee booking window updated successfully.');
+            },
+        });
+    }
+
+    return (
+        <>
+            <Button variant="outline" onClick={openDialog}>
+                <Clock3 />
+                Booking window
+                <Badge variant={bookingWindow.enabled ? 'default' : 'secondary'} className="ml-1">
+                    {bookingWindow.enabled
+                        ? `${displayClockTime(bookingWindow.opens_at)} – ${displayClockTime(bookingWindow.closes_at)}`
+                        : 'Always open'}
+                </Badge>
+            </Button>
+            <Dialog open={open} onOpenChange={(nextOpen) => !form.processing && setOpen(nextOpen)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Employee booking window</DialogTitle>
+                        <DialogDescription>
+                            Choose the hours when employees may open the schedules page and book seats. Times follow {operatingTimezone}.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={submit} className="space-y-4">
+                        <label className="hover:bg-accent/40 flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors">
+                            <Checkbox checked={form.data.enabled} onCheckedChange={(checked) => toggleEnabled(checked === true)} className="mt-0.5" />
+                            <span className="min-w-0">
+                                <span className="block text-sm font-medium">Restrict booking to set hours</span>
+                                <span className="text-muted-foreground block text-xs">
+                                    When off, employees may browse schedules and book at any time of day.
+                                </span>
+                            </span>
+                        </label>
+                        {form.errors.enabled && <p className="text-destructive text-sm">{form.errors.enabled}</p>}
+
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <div className="space-y-2">
+                                <Label htmlFor="booking-opens-at">Booking opens at</Label>
+                                <Input
+                                    id="booking-opens-at"
+                                    type="time"
+                                    value={form.data.opens_at}
+                                    disabled={!form.data.enabled}
+                                    onChange={(event) => form.setData('opens_at', event.target.value)}
+                                />
+                                {form.errors.opens_at && <p className="text-destructive text-sm">{form.errors.opens_at}</p>}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="booking-closes-at">Booking closes at</Label>
+                                <Input
+                                    id="booking-closes-at"
+                                    type="time"
+                                    value={form.data.closes_at}
+                                    disabled={!form.data.enabled}
+                                    onChange={(event) => form.setData('closes_at', event.target.value)}
+                                />
+                                {form.errors.closes_at && <p className="text-destructive text-sm">{form.errors.closes_at}</p>}
+                            </div>
+                        </div>
+
+                        <p className="text-muted-foreground rounded-lg border p-3 text-xs leading-5">
+                            {spansMidnight
+                                ? `This window crosses midnight: booking stays open from ${displayClockTime(form.data.opens_at)} through ${displayClockTime(form.data.closes_at)} the following morning. `
+                                : ''}
+                            Outside these hours the employee schedules page is locked, and reserving a seat, changing seats, and joining a waitlist
+                            are blocked. Employees can still sign in, review their reservations, and cancel a booking at any time.
+                        </p>
+
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={form.processing}>
+                                Cancel
+                            </Button>
+                            <Button type="submit" disabled={form.processing}>
+                                {form.processing && <LoaderCircle className="animate-spin" />}
+                                Save booking window
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+        </>
+    );
 }
 
 function createEmptyForm(): ScheduleFormData {
@@ -156,6 +304,7 @@ export default function SchedulesPage({
     drivers,
     operatingTimezone,
     selectedDate = today(),
+    bookingWindow,
     defaultPrioritySeatCount = 8,
     scheduleOccurrences = [],
 }: SchedulesPageProps) {
@@ -421,6 +570,7 @@ export default function SchedulesPage({
                                 <span className="hidden sm:inline">Grid</span>
                             </ToggleGroupItem>
                         </ToggleGroup>
+                        <BookingWindowDialog bookingWindow={bookingWindow} operatingTimezone={operatingTimezone} />
                         <Button onClick={openCreate}>
                             <Plus />
                             Add schedule
@@ -575,19 +725,21 @@ export default function SchedulesPage({
                                         {form.errors.departure_time && <p className="text-destructive text-sm">{form.errors.departure_time}</p>}
                                     </div>
 
-                                    <div className="space-y-2">
-                                        <Label>Status</Label>
-                                        <Select value={form.data.status} onValueChange={(value: ScheduleStatus) => form.setData('status', value)}>
-                                            <SelectTrigger>
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="ACTIVE">Active</SelectItem>
-                                                <SelectItem value="INACTIVE">Inactive</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        {form.errors.status && <p className="text-destructive text-sm">{form.errors.status}</p>}
-                                    </div>
+                                    {editingSchedule && (
+                                        <div className="space-y-2">
+                                            <Label>Status</Label>
+                                            <Select value={form.data.status} onValueChange={(value: ScheduleStatus) => form.setData('status', value)}>
+                                                <SelectTrigger>
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="ACTIVE">Active</SelectItem>
+                                                    <SelectItem value="INACTIVE">Inactive</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            {form.errors.status && <p className="text-destructive text-sm">{form.errors.status}</p>}
+                                        </div>
+                                    )}
 
                                     <div className="space-y-2 sm:col-span-2">
                                         <Label>Operating days</Label>

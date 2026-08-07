@@ -1,12 +1,13 @@
 import AppLogoIcon from '@/components/app-logo-icon';
 import AppearanceToggleDropdown from '@/components/appearance-dropdown';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useStoredAppearance } from '@/hooks/use-appearance';
 import { cn } from '@/lib/utils';
 import { Link, usePage } from '@inertiajs/react';
-import { CalendarDays, LayoutDashboard, LogOut, ShieldCheck, TicketCheck } from 'lucide-react';
+import { CalendarDays, LayoutDashboard, Lock, LogOut, ShieldCheck, TicketCheck } from 'lucide-react';
 import { type ReactNode } from 'react';
 
 interface EmployeeIdentity {
@@ -19,10 +20,19 @@ interface EmployeeIdentity {
     priority_status: 'REGULAR' | 'PRIORITY';
 }
 
+interface BookingWindowState {
+    enabled: boolean;
+    opens_at: string | null;
+    closes_at: string | null;
+    is_open: boolean;
+    message: string | null;
+}
+
 interface EmployeeSharedProps {
     auth: {
         employee: EmployeeIdentity | null;
     };
+    booking_window: BookingWindowState | null;
     [key: string]: unknown;
 }
 
@@ -54,6 +64,8 @@ export default function EmployeeLayout({ children, title, description }: Employe
     const page = usePage<EmployeeSharedProps>();
     const employee = page.props.auth.employee;
     const currentPath = page.url.split('?')[0];
+    const bookingWindow = page.props.booking_window;
+    const bookingLocked = bookingWindow !== null && bookingWindow.enabled && !bookingWindow.is_open;
 
     if (!employee) {
         return null;
@@ -76,7 +88,21 @@ export default function EmployeeLayout({ children, title, description }: Employe
                     <p className="px-3 py-2 text-[0.65rem] font-semibold tracking-[0.18em] text-blue-200/70 uppercase">Reservation</p>
                     {navigation.map((item) => {
                         const isActive = currentPath === item.href;
-                        const Icon = item.icon;
+                        const isLocked = bookingLocked && item.href === '/employee/schedules';
+                        const Icon = isLocked ? Lock : item.icon;
+
+                        if (isLocked) {
+                            return (
+                                <span
+                                    key={item.href}
+                                    title={bookingWindow?.message ?? undefined}
+                                    className="flex cursor-not-allowed items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-blue-100/40"
+                                >
+                                    <Icon className="size-5" />
+                                    {item.label}
+                                </span>
+                            );
+                        }
 
                         return (
                             <Link
@@ -181,6 +207,13 @@ export default function EmployeeLayout({ children, title, description }: Employe
                         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
                         {description && <p className="text-muted-foreground mt-1 text-sm">{description}</p>}
                     </div>
+                    {bookingLocked && (
+                        <Alert className="mb-6 border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/35 dark:text-amber-100">
+                            <Lock />
+                            <AlertTitle>Booking is closed right now</AlertTitle>
+                            <AlertDescription>{bookingWindow?.message} You can still review and cancel your existing reservations.</AlertDescription>
+                        </Alert>
+                    )}
                     {children}
                 </main>
             </div>
@@ -191,7 +224,21 @@ export default function EmployeeLayout({ children, title, description }: Employe
             >
                 {navigation.map((item) => {
                     const isActive = currentPath === item.href;
-                    const Icon = item.icon;
+                    const isLocked = bookingLocked && item.href === '/employee/schedules';
+                    const Icon = isLocked ? Lock : item.icon;
+
+                    if (isLocked) {
+                        return (
+                            <span
+                                key={item.href}
+                                title={bookingWindow?.message ?? undefined}
+                                className="text-muted-foreground/50 flex min-w-0 cursor-not-allowed flex-col items-center gap-1 rounded-xl px-2 py-2 text-[0.68rem] font-medium"
+                            >
+                                <Icon className="size-5" />
+                                <span className="truncate">{item.label}</span>
+                            </span>
+                        );
+                    }
 
                     return (
                         <Link

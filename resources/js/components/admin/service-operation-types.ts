@@ -64,7 +64,6 @@ export interface ServiceOccurrence {
         id: number;
         plate_number: string;
         vehicle_type?: string | null;
-        current_odometer_km?: number | string | null;
     };
     driver?: {
         id: number;

@@ -51,17 +51,9 @@ class ShuttleServiceCloseoutService
             ->oldest('scheduled_departure_at')
             ->value('opening_odometer_km');
 
-        if ($nextOpeningReading !== null) {
-            return number_format((float) $nextOpeningReading, 1, '.', '');
-        }
-
-        $vehicleReading = Vehicle::query()
-            ->whereKey($occurrence->vehicle_id)
-            ->value('current_odometer_km');
-
-        return $vehicleReading === null
+        return $nextOpeningReading === null
             ? null
-            : number_format((float) $vehicleReading, 1, '.', '');
+            : number_format((float) $nextOpeningReading, 1, '.', '');
     }
 
     /**
@@ -123,11 +115,6 @@ class ShuttleServiceCloseoutService
                 'finalized_by_id_snapshot' => $administrator->getKey(),
                 'finalized_by_name' => $administrator->name,
             ])->save();
-
-            $this->refreshVehicleCurrentReading(
-                (int) $lockedOccurrence->vehicle_id,
-                $openingOdometer
-            );
 
             return $lockedOccurrence->refresh();
         }, 5);
@@ -306,13 +293,6 @@ class ShuttleServiceCloseoutService
                 'corrected_at' => now(),
             ]);
 
-            if ($lockedOccurrence->status === ServiceOccurrenceStatus::Completed) {
-                $this->refreshVehicleCurrentReading(
-                    (int) $lockedOccurrence->vehicle_id,
-                    (float) $lockedOccurrence->opening_odometer_km
-                );
-            }
-
             return $lockedOccurrence->refresh();
         }, 5);
     }
@@ -378,13 +358,6 @@ class ShuttleServiceCloseoutService
                 'after_values' => $afterValues,
                 'corrected_at' => now(),
             ]);
-
-            if ($previousStatus === ServiceOccurrenceStatus::Completed) {
-                $this->refreshVehicleCurrentReading(
-                    (int) $lockedOccurrence->vehicle_id,
-                    (float) ($lockedOccurrence->opening_odometer_km ?? 0)
-                );
-            }
 
             return $lockedOccurrence->refresh();
         }, 5);
@@ -653,14 +626,6 @@ class ShuttleServiceCloseoutService
         float $openingOdometer,
         float $closingOdometer,
     ): void {
-        $vehicleReading = null;
-
-        if ($occurrence->vehicle_id !== null) {
-            $vehicleReading = Vehicle::query()
-                ->whereKey($occurrence->vehicle_id)
-                ->value('current_odometer_km');
-        }
-
         if ($closingOdometer < $openingOdometer) {
             throw ValidationException::withMessages([
                 'closing_odometer_km' => 'The closing odometer must be at least the opening odometer.',
@@ -700,18 +665,6 @@ class ShuttleServiceCloseoutService
                 'closing_odometer_km' => 'The closing odometer cannot exceed the next completed service’s opening reading.',
             ]);
         }
-
-        if (
-            $previousClosing === null
-            && $nextOpening === null
-            && $vehicleReading !== null
-            && $occurrence->status !== ServiceOccurrenceStatus::Completed
-            && $openingOdometer < (float) $vehicleReading
-        ) {
-            throw ValidationException::withMessages([
-                'opening_odometer_km' => 'The opening odometer cannot be lower than the vehicle’s latest known reading.',
-            ]);
-        }
     }
 
     /**
@@ -731,30 +684,6 @@ class ShuttleServiceCloseoutService
                 'actual_arrival_at' => 'The actual arrival must be after the actual departure.',
             ]);
         }
-    }
-
-    private function refreshVehicleCurrentReading(
-        int $vehicleId,
-        float $fallbackReading,
-    ): void {
-        $vehicle = Vehicle::query()
-            ->lockForUpdate()
-            ->find($vehicleId);
-
-        if ($vehicle === null) {
-            return;
-        }
-
-        $latestReading = ShuttleServiceOccurrence::query()
-            ->where('vehicle_id', $vehicleId)
-            ->where('status', ServiceOccurrenceStatus::Completed)
-            ->whereNotNull('closing_odometer_km')
-            ->latest('scheduled_departure_at')
-            ->value('closing_odometer_km');
-
-        $vehicle->forceFill([
-            'current_odometer_km' => $latestReading ?? $fallbackReading,
-        ])->save();
     }
 
     private function lockVehicle(?int $vehicleId): void

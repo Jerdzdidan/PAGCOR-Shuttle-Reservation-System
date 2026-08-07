@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Department;
+use App\Models\Employee;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -15,6 +16,14 @@ class StoreEmployeeRequest extends FormRequest
     public function authorize(): bool
     {
         return $this->user()?->isAdmin() ?? false;
+    }
+
+    /**
+     * Newly created employees are always active; the status is only editable on update.
+     */
+    protected function prepareForValidation(): void
+    {
+        $this->merge(['status' => Employee::STATUS_ACTIVE]);
     }
 
     /**

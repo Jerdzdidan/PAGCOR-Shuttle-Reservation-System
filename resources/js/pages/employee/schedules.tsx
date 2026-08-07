@@ -89,6 +89,13 @@ interface ScheduleOccurrence {
     booking_open?: boolean;
 }
 
+interface DailyEntry {
+    type: 'RESERVATION' | 'WAITLIST';
+    schedule_id: number;
+    route_name: string;
+    departure_time: string;
+}
+
 interface SchedulesPageProps {
     selectedDate: string;
     dates: Array<{
@@ -97,6 +104,7 @@ interface SchedulesPageProps {
         dayLabel: string;
     }>;
     schedules: ScheduleOccurrence[];
+    dailyEntry?: DailyEntry | null;
     operating_timezone?: string;
 }
 
@@ -209,10 +217,12 @@ function ScheduleCard({
     schedule,
     selectedDate,
     priorityStatus,
+    dailyEntry,
 }: {
     schedule: ScheduleOccurrence;
     selectedDate: string;
     priorityStatus: PriorityStatus;
+    dailyEntry: DailyEntry | null;
 }) {
     const [origin, destination] = routeEndpoints(schedule);
     const usedEligibleSeats = Math.max(0, schedule.eligible_capacity - schedule.available_eligible_seats);
@@ -225,6 +235,13 @@ function ScheduleCard({
     const waitlistEnabled = schedule.waitlist_enabled !== false;
     const waitlistIsFull =
         schedule.waitlist_capacity !== null && schedule.waitlist_capacity !== undefined && schedule.queue_size >= schedule.waitlist_capacity;
+    const blockedByOtherBooking = dailyEntry !== null && dailyEntry.schedule_id !== schedule.id && !schedule.reservation && !schedule.waitlist;
+    const blockedMessage =
+        dailyEntry === null
+            ? ''
+            : dailyEntry.type === 'RESERVATION'
+              ? `You already have a seat on ${dailyEntry.route_name} at ${displayTime(dailyEntry.departure_time)} today. Only one schedule per day can be booked.`
+              : `You are on the ${dailyEntry.route_name} waitlist for ${displayTime(dailyEntry.departure_time)} today. Only one schedule per day can be booked.`;
 
     return (
         <Card className="group overflow-hidden transition-shadow hover:shadow-md">
@@ -374,13 +391,28 @@ function ScheduleCard({
                 </div>
 
                 {schedule.reservation && bookingOpen ? (
-                    <CancelAction
-                        endpoint={`/employee/reservations/${schedule.reservation.id}`}
-                        title="Cancel this reservation?"
-                        description={`Seat ${schedule.reservation.seat_number} will be released. The next eligible employee in the queue may be assigned automatically.`}
-                        buttonLabel="Cancel reservation"
-                        successMessage="Your reservation was cancelled."
-                    />
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <SeatSelector
+                            scheduleId={schedule.id}
+                            travelDate={selectedDate}
+                            capacity={schedule.effective_capacity}
+                            prioritySeats={prioritySeats}
+                            unavailableSeats={unavailableSeats}
+                            prioritySeatCount={schedule.priority_seat_count}
+                            occupiedSeats={schedule.occupied_seats}
+                            priorityStatus={priorityStatus}
+                            routeName={schedule.route.name}
+                            departureTime={displayTime(schedule.departure_time)}
+                            reservation={schedule.reservation}
+                        />
+                        <CancelAction
+                            endpoint={`/employee/reservations/${schedule.reservation.id}`}
+                            title="Cancel this reservation?"
+                            description={`Seat ${schedule.reservation.seat_number} will be released. The next eligible employee in the queue may be assigned automatically.`}
+                            buttonLabel="Cancel reservation"
+                            successMessage="Your reservation was cancelled."
+                        />
+                    </div>
                 ) : schedule.reservation ? (
                     <span className="text-muted-foreground text-sm font-medium">Departure has closed</span>
                 ) : schedule.waitlist && bookingOpen ? (
@@ -393,6 +425,8 @@ function ScheduleCard({
                     />
                 ) : schedule.waitlist ? (
                     <span className="text-muted-foreground text-sm font-medium">Departure has closed</span>
+                ) : blockedByOtherBooking && bookingOpen ? (
+                    <span className="text-muted-foreground max-w-xs text-sm font-medium sm:text-right">{blockedMessage}</span>
                 ) : schedule.is_full_for_employee && bookingOpen && schedule.eligible_capacity > 0 && !waitlistEnabled ? (
                     <span className="text-muted-foreground text-sm font-medium">Waitlist is disabled for this schedule</span>
                 ) : schedule.is_full_for_employee && bookingOpen && schedule.eligible_capacity > 0 && waitlistIsFull ? (
@@ -422,13 +456,19 @@ function ScheduleCard({
     );
 }
 
-export default function EmployeeSchedules({ selectedDate, dates, schedules, operating_timezone = 'Asia/Manila' }: SchedulesPageProps) {
+export default function EmployeeSchedules({
+    selectedDate,
+    dates,
+    schedules,
+    dailyEntry = null,
+    operating_timezone = 'Asia/Manila',
+}: SchedulesPageProps) {
     const { auth } = usePage<EmployeeSharedProps>().props;
     const [routeFilter, setRouteFilter] = useState('ALL');
     const [directionFilter, setDirectionFilter] = useState('ALL');
 
     usePoll(10000, {
-        only: ['schedules'],
+        only: ['schedules', 'dailyEntry'],
     });
 
     const routeNames = useMemo(() => [...new Set(schedules.map((schedule) => schedule.route.name))].sort(), [schedules]);
@@ -451,7 +491,7 @@ export default function EmployeeSchedules({ selectedDate, dates, schedules, oper
                 preserveState: true,
                 preserveScroll: true,
                 replace: true,
-                only: ['selectedDate', 'dates', 'schedules'],
+                only: ['selectedDate', 'dates', 'schedules', 'dailyEntry'],
             },
         );
     }
@@ -571,6 +611,7 @@ export default function EmployeeSchedules({ selectedDate, dates, schedules, oper
                                 schedule={schedule}
                                 selectedDate={selectedDate}
                                 priorityStatus={auth.employee.priority_status}
+                                dailyEntry={dailyEntry}
                             />
                         ))}
                     </div>
@@ -578,10 +619,11 @@ export default function EmployeeSchedules({ selectedDate, dates, schedules, oper
 
                 <Alert>
                     <UserRound />
-                    <AlertTitle>How the queue works</AlertTitle>
+                    <AlertTitle>How booking works</AlertTitle>
                     <AlertDescription>
-                        When enabled for a schedule, the waitlist appears only when all seats you can use are occupied. Open seats are assigned to
-                        priority employees first, then to regular employees in first-come, first-served order.
+                        You may hold one schedule per travel date. Once booked, you can move to any open seat on that shuttle without cancelling. When
+                        enabled for a schedule, the waitlist appears only when all seats you can use are occupied. Open seats are assigned to priority
+                        employees first, then to regular employees in first-come, first-served order.
                     </AlertDescription>
                 </Alert>
             </div>

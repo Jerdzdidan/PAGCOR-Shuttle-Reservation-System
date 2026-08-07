@@ -193,19 +193,21 @@ export default function DriversPage({ drivers }: DriversPageProps) {
                                 />
                                 {form.errors.license_expires_at && <p className="text-destructive text-sm">{form.errors.license_expires_at}</p>}
                             </div>
-                            <div className="space-y-2 sm:col-span-2">
-                                <Label>Status</Label>
-                                <Select value={form.data.status} onValueChange={(value: DriverStatus) => form.setData('status', value)}>
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="ACTIVE">Active</SelectItem>
-                                        <SelectItem value="INACTIVE">Inactive</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                {form.errors.status && <p className="text-destructive text-sm">{form.errors.status}</p>}
-                            </div>
+                            {editingDriver && (
+                                <div className="space-y-2 sm:col-span-2">
+                                    <Label>Status</Label>
+                                    <Select value={form.data.status} onValueChange={(value: DriverStatus) => form.setData('status', value)}>
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="ACTIVE">Active</SelectItem>
+                                            <SelectItem value="INACTIVE">Inactive</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    {form.errors.status && <p className="text-destructive text-sm">{form.errors.status}</p>}
+                                </div>
+                            )}
                             <div className="space-y-2 sm:col-span-2">
                                 <Label htmlFor="driver-notes">Notes</Label>
                                 <Textarea

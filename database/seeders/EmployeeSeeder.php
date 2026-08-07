@@ -29,6 +29,7 @@ class EmployeeSeeder extends Seeder
             ['name' => 'Paolo Aquino', 'email' => 'paolo.aquino@pagcor.example', 'contact_number' => '09171230010', 'department' => 'Corporate Services', 'position' => 'Procurement Officer'],
             ['name' => 'Teresa Morales', 'email' => 'teresa.morales@pagcor.example', 'contact_number' => '09171230011', 'department' => 'Gaming Licensing and Development', 'position' => 'Licensing Specialist'],
             ['name' => 'Adrian Lopez', 'email' => 'adrian.lopez@pagcor.example', 'contact_number' => '09171230012', 'department' => 'Corporate Services', 'position' => 'Records Officer'],
+            ['name' => 'Jerdan Gondayao', 'email' => 'jdgonzdayao@gmail.com', 'contact_number' => '09171230012', 'department' => 'Corporate Services', 'position' => 'Records Officer'],
         ]);
 
         for (

@@ -16,6 +16,14 @@ class StoreShuttleRouteRequest extends FormRequest
     }
 
     /**
+     * Newly created routes are always active; the status is only editable on update.
+     */
+    protected function prepareForValidation(): void
+    {
+        $this->merge(['status' => 'ACTIVE']);
+    }
+
+    /**
      * Get the validation rules that apply to the request.
      *
      * @return array<string, ValidationRule|array<mixed>|string>

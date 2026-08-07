@@ -139,19 +139,21 @@ export default function RoutesPage({ routes }: RoutesPageProps) {
                                 />
                                 {form.errors.destination && <p className="text-destructive text-sm">{form.errors.destination}</p>}
                             </div>
-                            <div className="space-y-2 sm:col-span-2">
-                                <Label>Status</Label>
-                                <Select value={form.data.status} onValueChange={(value: RouteStatus) => form.setData('status', value)}>
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="ACTIVE">Active</SelectItem>
-                                        <SelectItem value="INACTIVE">Inactive</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                {form.errors.status && <p className="text-destructive text-sm">{form.errors.status}</p>}
-                            </div>
+                            {editingRoute && (
+                                <div className="space-y-2 sm:col-span-2">
+                                    <Label>Status</Label>
+                                    <Select value={form.data.status} onValueChange={(value: RouteStatus) => form.setData('status', value)}>
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="ACTIVE">Active</SelectItem>
+                                            <SelectItem value="INACTIVE">Inactive</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    {form.errors.status && <p className="text-destructive text-sm">{form.errors.status}</p>}
+                                </div>
+                            )}
                         </div>
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>

@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Enums\ServiceOccurrenceStatus;
 use App\Models\ShuttleServiceOccurrence;
+use App\Services\EmployeeBookingWindow;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -63,6 +64,9 @@ class HandleInertiaRequests extends Middleware
                 'success' => $request->session()->get('success'),
                 'error' => $request->session()->get('error'),
             ],
+            'booking_window' => fn (): ?array => $employee === null
+                ? null
+                : app(EmployeeBookingWindow::class)->state(),
             'pending_completion_count' => fn (): int => $administrator?->isAdmin()
                 ? ShuttleServiceOccurrence::query()
                     ->where('status', ServiceOccurrenceStatus::AwaitingCompletion)

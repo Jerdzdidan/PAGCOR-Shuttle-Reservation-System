@@ -455,23 +455,25 @@ export default function EmployeesPage({ employees, departments }: EmployeesPageP
                                 </p>
                                 {form.errors.priority_status && <p className="text-destructive text-sm">{form.errors.priority_status}</p>}
                             </div>
-                            <div className="space-y-2 sm:col-span-2">
-                                <Label>QR access status</Label>
-                                <Select value={form.data.status} onValueChange={(value: 'ACTIVE' | 'INACTIVE') => form.setData('status', value)}>
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="ACTIVE">Active — may sign in and board</SelectItem>
-                                        <SelectItem value="INACTIVE">Inactive — access blocked</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <p className="text-muted-foreground text-xs">
-                                    The permanent QR stays unchanged. Employees with future reservations or waitlist entries cannot be made inactive
-                                    until those entries are resolved.
-                                </p>
-                                {form.errors.status && <p className="text-destructive text-sm">{form.errors.status}</p>}
-                            </div>
+                            {editingEmployee && (
+                                <div className="space-y-2 sm:col-span-2">
+                                    <Label>QR access status</Label>
+                                    <Select value={form.data.status} onValueChange={(value: 'ACTIVE' | 'INACTIVE') => form.setData('status', value)}>
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="ACTIVE">Active — may sign in and board</SelectItem>
+                                            <SelectItem value="INACTIVE">Inactive — access blocked</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-muted-foreground text-xs">
+                                        The permanent QR stays unchanged. Employees with future reservations or waitlist entries cannot be made
+                                        inactive until those entries are resolved.
+                                    </p>
+                                    {form.errors.status && <p className="text-destructive text-sm">{form.errors.status}</p>}
+                                </div>
+                            )}
                         </div>
                         {editingEmployee?.status === 'ACTIVE' && (
                             <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50/70 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900 dark:bg-amber-950/20">
@@ -513,9 +515,9 @@ export default function EmployeesPage({ employees, departments }: EmployeesPageP
                     <DialogHeader>
                         <DialogTitle>Import employees</DialogTitle>
                         <DialogDescription>
-                            Upload an XLSX, XLS, or CSV file with these headings: name, email, contact_number, department, position, priority_status,
-                            status. Department names must already exist in Department management. Name and email are required; priority_status
-                            defaults to REGULAR and status defaults to ACTIVE.
+                            Upload an XLSX, XLS, or CSV file with these headings: name, email, contact_number, department, position, priority_status.
+                            Department names must already exist in Department management. Name and email are required; priority_status defaults to
+                            REGULAR. Imported employees are always created active.
                         </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={submitImport} className="space-y-4">

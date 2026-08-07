@@ -329,10 +329,7 @@ function ServiceCloseout({ occurrence, onFinalized }: { occurrence: ServiceOccur
     const [confirmed, setConfirmed] = useState(false);
     const completeForm = useForm<CompleteFormData>({
         opening_odometer_km: numberValue(
-            occurrence.opening_odometer_km ??
-                occurrence.suggested_opening_odometer_km ??
-                occurrence.opening_odometer_prefill ??
-                occurrence.vehicle?.current_odometer_km,
+            occurrence.opening_odometer_km ?? occurrence.suggested_opening_odometer_km ?? occurrence.opening_odometer_prefill,
         ),
         closing_odometer_km: numberValue(occurrence.closing_odometer_km),
         actual_departure_at: datetimeLocalValue(occurrence.actual_departure_at),

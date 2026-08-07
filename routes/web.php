@@ -62,6 +62,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::resource('vehicles', VehicleController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::resource('drivers', DriverController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::resource('routes', ShuttleRouteController::class)->only(['index', 'store', 'update', 'destroy']);
+    Route::put('schedules/booking-window', [ShuttleScheduleController::class, 'updateBookingWindow'])
+        ->name('schedules.booking_window.update');
     Route::resource('schedules', ShuttleScheduleController::class)->only(['index', 'store', 'update', 'destroy']);
 });
 
@@ -78,11 +80,14 @@ Route::middleware('guest:employee')->prefix('employee')->name('employee.')->grou
 
 Route::middleware(['auth:employee', 'employee.active'])->prefix('employee')->name('employee.')->group(function () {
     Route::get('dashboard', [EmployeeDashboardController::class, 'index'])->name('dashboard');
-    Route::get('schedules', [EmployeeScheduleController::class, 'index'])->name('schedules.index');
+    Route::middleware('booking.window')->group(function () {
+        Route::get('schedules', [EmployeeScheduleController::class, 'index'])->name('schedules.index');
+        Route::post('reservations', [EmployeeReservationController::class, 'store'])->name('reservations.store');
+        Route::patch('reservations/{reservation}', [EmployeeReservationController::class, 'update'])->name('reservations.update');
+        Route::post('waitlist', [EmployeeWaitlistController::class, 'store'])->name('waitlist.store');
+    });
     Route::get('reservations', [EmployeeReservationController::class, 'index'])->name('reservations.index');
-    Route::post('reservations', [EmployeeReservationController::class, 'store'])->name('reservations.store');
     Route::delete('reservations/{reservation}', [EmployeeReservationController::class, 'destroy'])->name('reservations.destroy');
-    Route::post('waitlist', [EmployeeWaitlistController::class, 'store'])->name('waitlist.store');
     Route::delete('waitlist/{waitlistEntry}', [EmployeeWaitlistController::class, 'destroy'])->name('waitlist.destroy');
     Route::post('logout', [EmployeeAuthenticatedSessionController::class, 'destroy'])->name('logout');
 });

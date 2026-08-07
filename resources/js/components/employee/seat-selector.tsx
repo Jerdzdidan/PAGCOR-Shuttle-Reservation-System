@@ -19,6 +19,8 @@ interface SeatSelectorProps {
     routeName: string;
     departureTime: string;
     disabled?: boolean;
+    /** Existing reservation to move. When set, the sheet switches seats instead of booking a new one. */
+    reservation?: { id: number; seat_number: number } | null;
 }
 
 interface ReservationForm {
@@ -49,14 +51,19 @@ export function SeatSelector({
     routeName,
     departureTime,
     disabled = false,
+    reservation = null,
 }: SeatSelectorProps) {
     const [open, setOpen] = useState(false);
+    const isChangingSeat = reservation !== null;
     const form = useForm<ReservationForm>({
         schedule_id: scheduleId,
         travel_date: travelDate,
-        seat_number: null,
+        seat_number: reservation?.seat_number ?? null,
     });
-    const occupiedSeatNumbers = useMemo(() => new Set(occupiedSeats), [occupiedSeats]);
+    const occupiedSeatNumbers = useMemo(
+        () => new Set(occupiedSeats.filter((seat) => seat !== reservation?.seat_number)),
+        [occupiedSeats, reservation],
+    );
     const prioritySeatNumbers = useMemo(
         () => new Set(prioritySeats ?? Array.from({ length: prioritySeatCount ?? 0 }, (_, index) => index + 1)),
         [prioritySeatCount, prioritySeats],
@@ -89,14 +96,21 @@ export function SeatSelector({
         }
 
         const selectedSeat = form.data.seat_number;
-        form.post('/employee/reservations', {
+        const options = {
             preserveScroll: true,
             onSuccess: () => {
                 setOpen(false);
-                toast.success(`Seat ${selectedSeat} is reserved.`);
-                form.reset('seat_number');
+                toast.success(isChangingSeat ? `You moved to seat ${selectedSeat}.` : `Seat ${selectedSeat} is reserved.`);
+                form.clearErrors();
             },
-        });
+        };
+
+        if (reservation) {
+            form.patch(`/employee/reservations/${reservation.id}`, options);
+            return;
+        }
+
+        form.post('/employee/reservations', options);
     }
 
     function handleOpenChange(nextOpen: boolean): void {
@@ -106,7 +120,7 @@ export function SeatSelector({
 
         setOpen(nextOpen);
         if (!nextOpen) {
-            form.reset('seat_number');
+            form.setData('seat_number', reservation?.seat_number ?? null);
             form.clearErrors();
         }
     }
@@ -116,14 +130,14 @@ export function SeatSelector({
     return (
         <Sheet open={open} onOpenChange={handleOpenChange}>
             <SheetTrigger asChild>
-                <Button disabled={disabled} className="w-full sm:w-auto">
+                <Button disabled={disabled} variant={isChangingSeat ? 'outline' : 'default'} className="w-full sm:w-auto">
                     <Armchair />
-                    Choose a seat
+                    {isChangingSeat ? 'Change seat' : 'Choose a seat'}
                 </Button>
             </SheetTrigger>
             <SheetContent className="flex h-full w-full flex-col overflow-y-auto p-0 sm:max-w-xl">
                 <SheetHeader className="border-b px-5 py-5 pr-14 sm:px-7">
-                    <SheetTitle>Select your shuttle seat</SheetTitle>
+                    <SheetTitle>{isChangingSeat ? 'Change your shuttle seat' : 'Select your shuttle seat'}</SheetTitle>
                     <SheetDescription>
                         {routeName} · {departureTime} · {travelDate}
                     </SheetDescription>
@@ -133,14 +147,18 @@ export function SeatSelector({
                     <div className="flex-1 space-y-5 px-5 py-6 sm:px-7">
                         <Alert className="border-blue-200 bg-blue-50 text-blue-950 dark:border-blue-900 dark:bg-blue-950/35 dark:text-blue-100">
                             <Info />
-                            <AlertTitle>Configured priority seats are protected</AlertTitle>
+                            <AlertTitle>
+                                {isChangingSeat ? `You are currently in seat ${reservation.seat_number}` : 'Configured priority seats are protected'}
+                            </AlertTitle>
                             <AlertDescription>
-                                Seats marked Priority are reserved for employees with priority access. Unavailable seats cannot be selected.
+                                {isChangingSeat
+                                    ? 'Pick another open seat to move there. Your reservation stays confirmed the whole time — no need to cancel it first.'
+                                    : 'Seats marked Priority are reserved for employees with priority access. Unavailable seats cannot be selected.'}
                             </AlertDescription>
                         </Alert>
 
                         <div className="flex flex-wrap gap-x-4 gap-y-2">
-                            <SeatLegend className="border-primary bg-primary" label="Selected" />
+                            <SeatLegend className="border-primary bg-primary" label={isChangingSeat ? 'Your seat' : 'Selected'} />
                             <SeatLegend className="border-border bg-background" label="Available" />
                             <SeatLegend className="border-amber-300 bg-amber-100 dark:border-amber-800 dark:bg-amber-950" label="Priority" />
                             <SeatLegend className="border-muted bg-muted" label="Occupied" />
@@ -149,13 +167,13 @@ export function SeatSelector({
 
                         <div className="border-border bg-muted/30 mx-auto w-full max-w-sm rounded-[2.5rem] border-2 p-4 shadow-inner sm:p-5">
                             <div className="mb-5 grid grid-cols-[1fr_1fr_0.45fr_1fr_1fr] items-center gap-2 rounded-t-[1.65rem] border-b bg-blue-50 p-3 dark:bg-blue-950/30">
-                                <div className="col-span-3 flex h-12 items-center justify-center rounded-xl border border-blue-200 bg-blue-100/80 text-xs font-medium tracking-wider text-blue-900 uppercase dark:border-blue-900 dark:bg-blue-950 dark:text-blue-100">
-                                    <BusFront className="mr-2 size-4" />
-                                    Windshield
-                                </div>
                                 <div className="bg-background col-span-2 flex h-12 items-center justify-center gap-2 rounded-xl border text-xs font-medium">
                                     <CircleGauge className="size-4" />
                                     Driver
+                                </div>
+                                <div className="col-span-3 flex h-12 items-center justify-center rounded-xl border border-blue-200 bg-blue-100/80 text-xs font-medium tracking-wider text-blue-900 uppercase dark:border-blue-900 dark:bg-blue-950 dark:text-blue-100">
+                                    <BusFront className="mr-2 size-4" />
+                                    Windshield
                                 </div>
                             </div>
 
@@ -240,9 +258,17 @@ export function SeatSelector({
                                     {form.data.seat_number === null ? 'No seat selected' : `Seat ${form.data.seat_number}`}
                                 </p>
                             </div>
-                            <Button type="submit" size="lg" disabled={form.processing || form.data.seat_number === null}>
+                            <Button
+                                type="submit"
+                                size="lg"
+                                disabled={
+                                    form.processing ||
+                                    form.data.seat_number === null ||
+                                    (isChangingSeat && form.data.seat_number === reservation.seat_number)
+                                }
+                            >
                                 {form.processing ? <LoaderCircle className="animate-spin" /> : <TicketCheck />}
-                                Confirm reservation
+                                {isChangingSeat ? 'Move to this seat' : 'Confirm reservation'}
                             </Button>
                         </div>
                     </SheetFooter>

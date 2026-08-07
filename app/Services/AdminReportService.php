@@ -533,7 +533,7 @@ class AdminReportService
     {
         $values = match ($report) {
             'shuttle_attendance' => ['BOARDED', 'NO_SHOW', 'SERVICE_NOT_OPERATED'],
-            'reservation_waitlist_activity' => ['RESERVATION_CREATED', 'RESERVATION_CANCELLED', 'WAITLIST_JOINED', 'WAITLIST_WITHDRAWN', 'WAITLIST_PROMOTED', 'WAITLIST_UNSERVED'],
+            'reservation_waitlist_activity' => ['RESERVATION_CREATED', 'RESERVATION_CANCELLED', 'RESERVATION_SEAT_CHANGED', 'WAITLIST_JOINED', 'WAITLIST_WITHDRAWN', 'WAITLIST_PROMOTED', 'WAITLIST_UNSERVED'],
             'fleet_utilization', 'route_schedule_demand', 'driver_utilization', 'login_activity' => [],
             default => ['SCHEDULED', 'AWAITING_COMPLETION', 'COMPLETED', 'NOT_OPERATED'],
         };

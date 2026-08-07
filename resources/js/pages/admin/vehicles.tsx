@@ -21,12 +21,8 @@ type ManagedVehicle = {
     capacity: number;
     status: VehicleStatus;
     notes: string | null;
-    current_odometer_km: string | null;
-    has_completed_services: boolean;
 };
-type VehicleFormData = Omit<ManagedVehicle, 'id' | 'current_odometer_km' | 'has_completed_services'> & {
-    current_odometer_km: string;
-};
+type VehicleFormData = Omit<ManagedVehicle, 'id'>;
 
 interface VehiclesPageProps {
     vehicles: ManagedVehicle[];
@@ -42,7 +38,6 @@ const emptyForm: VehicleFormData = {
     capacity: 1,
     status: 'ACTIVE',
     notes: '',
-    current_odometer_km: '',
 };
 
 function statusVariant(status: VehicleStatus): 'default' | 'secondary' | 'destructive' {
@@ -68,15 +63,6 @@ export default function VehiclesPage({ vehicles }: VehiclesPageProps) {
         { key: 'vehicle_type', label: 'Type', render: (vehicle) => vehicle.vehicle_type, sortValue: (vehicle) => vehicle.vehicle_type },
         { key: 'capacity', label: 'Capacity', render: (vehicle) => `${vehicle.capacity} seats`, sortValue: (vehicle) => vehicle.capacity },
         {
-            key: 'current_odometer_km',
-            label: 'Latest odometer',
-            render: (vehicle) =>
-                vehicle.current_odometer_km === null
-                    ? 'Not recorded'
-                    : `${Number(vehicle.current_odometer_km).toLocaleString('en-PH', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km`,
-            sortValue: (vehicle) => Number(vehicle.current_odometer_km ?? -1),
-        },
-        {
             key: 'status',
             label: 'Status',
             render: (vehicle) => <Badge variant={statusVariant(vehicle.status)}>{vehicle.status}</Badge>,
@@ -98,7 +84,6 @@ export default function VehiclesPage({ vehicles }: VehiclesPageProps) {
             capacity: vehicle.capacity,
             status: vehicle.status,
             notes: vehicle.notes ?? '',
-            current_odometer_km: vehicle.current_odometer_km ?? '',
         });
         form.clearErrors();
         setFormOpen(true);
@@ -194,29 +179,6 @@ export default function VehiclesPage({ vehicles }: VehiclesPageProps) {
                                     onChange={(event) => form.setData('capacity', Number(event.target.value))}
                                 />
                                 {form.errors.capacity && <p className="text-destructive text-sm">{form.errors.capacity}</p>}
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="vehicle-odometer">
-                                    {editingVehicle ? 'Current odometer (km)' : 'Initial odometer (km)'}{' '}
-                                    <span className="text-muted-foreground">(optional)</span>
-                                </Label>
-                                <Input
-                                    id="vehicle-odometer"
-                                    type="number"
-                                    inputMode="decimal"
-                                    min={0}
-                                    step={0.1}
-                                    placeholder="e.g. 12500.0"
-                                    value={form.data.current_odometer_km}
-                                    onChange={(event) => form.setData('current_odometer_km', event.target.value)}
-                                    disabled={editingVehicle?.has_completed_services === true}
-                                />
-                                <p className="text-muted-foreground text-xs">
-                                    {editingVehicle?.has_completed_services
-                                        ? 'Read-only: completed service closeouts are now the authoritative odometer source.'
-                                        : 'Use the latest known baseline. Completed service closeouts update this reading automatically.'}
-                                </p>
-                                {form.errors.current_odometer_km && <p className="text-destructive text-sm">{form.errors.current_odometer_km}</p>}
                             </div>
                             {editingVehicle && (
                                 <div className="space-y-2 sm:col-span-2">

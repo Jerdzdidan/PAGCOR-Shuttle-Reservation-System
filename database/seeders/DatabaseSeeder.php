@@ -13,12 +13,12 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::create([
-        //     'name' => 'Root User',
-        //     'email' => 'root@gmail.com',
-        //     'password' => Hash::make('123456'),
-        //     'user_type' => 'ADMIN',
-        // ]);
+        User::create([
+            'name' => 'Root User',
+            'email' => 'root@gmail.com',
+            'password' => Hash::make('123456'),
+            'user_type' => 'ADMIN',
+        ]);
 
         $seeders = [
             DepartmentSeeder::class,

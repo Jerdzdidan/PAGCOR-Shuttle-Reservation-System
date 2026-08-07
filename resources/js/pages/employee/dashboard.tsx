@@ -35,6 +35,7 @@ interface EmployeeSharedProps {
     auth: {
         employee: EmployeeIdentity;
     };
+    booking_window: { enabled: boolean; is_open: boolean; message: string | null } | null;
     [key: string]: unknown;
 }
 
@@ -97,7 +98,8 @@ function endpoints(schedule: ScheduleSummary): [string, string] {
 }
 
 export default function EmployeeDashboard({ upcomingReservations, waitlists, operating_timezone = 'Asia/Manila' }: DashboardProps) {
-    const { auth } = usePage<EmployeeSharedProps>().props;
+    const { auth, booking_window: bookingWindow } = usePage<EmployeeSharedProps>().props;
+    const bookingLocked = bookingWindow !== null && bookingWindow.enabled && !bookingWindow.is_open;
     const employee = auth.employee;
     const nextReservation = upcomingReservations[0];
 
@@ -127,12 +129,19 @@ export default function EmployeeDashboard({ upcomingReservations, waitlists, ope
                                 Find your next PAGCOR shuttle, reserve a seat, and follow any waitlist updates from one place.
                             </p>
                         </div>
-                        <Button asChild size="lg" className="text-brand-navy bg-white hover:bg-blue-50">
-                            <Link href="/employee/schedules">
+                        {bookingLocked ? (
+                            <Button size="lg" disabled className="text-brand-navy bg-white hover:bg-blue-50">
                                 <CalendarDays />
-                                Browse schedules
-                            </Link>
-                        </Button>
+                                Booking closed
+                            </Button>
+                        ) : (
+                            <Button asChild size="lg" className="text-brand-navy bg-white hover:bg-blue-50">
+                                <Link href="/employee/schedules">
+                                    <CalendarDays />
+                                    Browse schedules
+                                </Link>
+                            </Button>
+                        )}
                     </div>
                 </section>
 
@@ -201,11 +210,15 @@ export default function EmployeeDashboard({ upcomingReservations, waitlists, ope
                                     </span>
                                     <h3 className="text-lg font-semibold">No upcoming reservation</h3>
                                     <p className="text-muted-foreground mt-1 max-w-sm text-sm leading-6">
-                                        Browse active shuttle schedules and choose the seat that works for you.
+                                        {bookingLocked
+                                            ? bookingWindow?.message
+                                            : 'Browse active shuttle schedules and choose the seat that works for you.'}
                                     </p>
-                                    <Button asChild className="mt-5">
-                                        <Link href="/employee/schedules">Reserve a shuttle</Link>
-                                    </Button>
+                                    {!bookingLocked && (
+                                        <Button asChild className="mt-5">
+                                            <Link href="/employee/schedules">Reserve a shuttle</Link>
+                                        </Button>
+                                    )}
                                 </CardContent>
                             </Card>
                         )}

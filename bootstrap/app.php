@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureBookingWindowIsOpen;
 use App\Http\Middleware\EnsureEmployeeIsActive;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -23,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'admin' => EnsureUserIsAdmin::class,
             'employee.active' => EnsureEmployeeIsActive::class,
+            'booking.window' => EnsureBookingWindowIsOpen::class,
         ]);
         $middleware->redirectGuestsTo(
             fn (Request $request): string => $request->is('employee', 'employee/*') ? '/employee/login' : '/login',

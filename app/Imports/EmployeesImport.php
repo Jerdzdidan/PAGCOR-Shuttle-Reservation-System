@@ -38,8 +38,8 @@ class EmployeesImport implements SkipsEmptyRows, ToModel, WithBatchInserts, With
             'contact_number' => filled($row['contact_number'] ?? null) ? trim((string) $row['contact_number']) : null,
             'department' => $this->departmentName($row['department'] ?? null),
             'position' => filled($row['position'] ?? null) ? trim((string) $row['position']) : null,
-            'priority_status' => filled($row['priority_status'] ?? null) ? Str::upper(trim((string) $row['priority_status'])) : 'REGULAR',
-            'status' => filled($row['status'] ?? null) ? Str::upper(trim((string) $row['status'])) : 'ACTIVE',
+            'priority_status' => filled($row['priority_status'] ?? null) ? Str::upper(trim((string) $row['priority_status'])) : Employee::PRIORITY_STATUS_REGULAR,
+            'status' => Employee::STATUS_ACTIVE,
         ]);
     }
 
@@ -55,7 +55,6 @@ class EmployeesImport implements SkipsEmptyRows, ToModel, WithBatchInserts, With
             '*.department' => ['nullable', 'string', 'max:100', Rule::exists(Department::class, 'name')],
             '*.position' => ['nullable', 'string', 'max:100'],
             '*.priority_status' => ['nullable', 'string', 'in:REGULAR,PRIORITY'],
-            '*.status' => ['nullable', 'string', 'in:ACTIVE,INACTIVE'],
         ];
     }
 

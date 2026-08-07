@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import EmployeeLayout from '@/layouts/employee-layout';
 import { cn } from '@/lib/utils';
-import { Head, Link, useForm, usePoll } from '@inertiajs/react';
+import { Head, Link, useForm, usePage, usePoll } from '@inertiajs/react';
 import {
     Armchair,
     ArrowRight,
@@ -69,6 +69,11 @@ interface CancelTarget {
     successMessage: string;
 }
 
+interface BookingWindowProps {
+    booking_window: { enabled: boolean; is_open: boolean; message: string | null } | null;
+    [key: string]: unknown;
+}
+
 function displayDate(date: string): string {
     return new Intl.DateTimeFormat('en-PH', {
         weekday: 'short',
@@ -94,6 +99,8 @@ export default function EmployeeReservations({ reservations, waitlists, operatin
     const [view, setView] = useState<ViewFilter>('ALL');
     const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
     const cancelForm = useForm({});
+    const bookingWindow = usePage<BookingWindowProps>().props.booking_window;
+    const bookingLocked = bookingWindow !== null && bookingWindow.enabled && !bookingWindow.is_open;
 
     usePoll(10000, {
         only: ['reservations', 'waitlists'],
@@ -190,14 +197,16 @@ export default function EmployeeReservations({ reservations, waitlists, operatin
                                       : 'Nothing booked yet'}
                             </h2>
                             <p className="text-muted-foreground mt-1 max-w-sm text-sm leading-6">
-                                Choose an available schedule and select your preferred shuttle seat.
+                                {bookingLocked ? bookingWindow?.message : 'Choose an available schedule and select your preferred shuttle seat.'}
                             </p>
-                            <Button asChild className="mt-5">
-                                <Link href="/employee/schedules">
-                                    <CalendarDays />
-                                    Browse schedules
-                                </Link>
-                            </Button>
+                            {!bookingLocked && (
+                                <Button asChild className="mt-5">
+                                    <Link href="/employee/schedules">
+                                        <CalendarDays />
+                                        Browse schedules
+                                    </Link>
+                                </Button>
+                            )}
                         </CardContent>
                     </Card>
                 ) : (

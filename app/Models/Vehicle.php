@@ -13,7 +13,7 @@ class Vehicle extends Model
     use HasFactory;
 
     /** @var list<string> */
-    protected $fillable = ['plate_number', 'vehicle_type', 'capacity', 'status', 'notes', 'current_odometer_km'];
+    protected $fillable = ['plate_number', 'vehicle_type', 'capacity', 'status', 'notes'];
 
     /** @var array<string, mixed> */
     protected $attributes = ['status' => 'ACTIVE'];
@@ -35,7 +35,6 @@ class Vehicle extends Model
     {
         return [
             'capacity' => 'integer',
-            'current_odometer_km' => 'decimal:1',
         ];
     }
 }
