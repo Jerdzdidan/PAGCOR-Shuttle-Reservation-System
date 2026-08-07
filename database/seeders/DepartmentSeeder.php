@@ -8,11 +8,24 @@ use Illuminate\Database\Seeder;
 class DepartmentSeeder extends Seeder
 {
     /**
-     * Run the database seeds.
+     * Departments that intentionally carry no employees so the delete flow and
+     * the "no employees" empty states can be exercised.
+     *
+     * @var list<string>
      */
-    public function run(): void
+    public const UNSTAFFED_DEPARTMENTS = [
+        'Office of the Chairman',
+        'Special Projects',
+    ];
+
+    /**
+     * Departments with employees assigned to them.
+     *
+     * @return list<string>
+     */
+    public static function staffedDepartments(): array
     {
-        $departments = [
+        return [
             'Corporate Communications',
             'Corporate Services',
             'Finance and Treasury',
@@ -26,6 +39,17 @@ class DepartmentSeeder extends Seeder
             'Responsible Gaming',
             'Security and Surveillance',
             'Transportation Services',
+        ];
+    }
+
+    /**
+     * Run the database seeds.
+     */
+    public function run(): void
+    {
+        $departments = [
+            ...self::staffedDepartments(),
+            ...self::UNSTAFFED_DEPARTMENTS,
         ];
 
         foreach ($departments as $department) {

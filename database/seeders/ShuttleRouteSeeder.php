@@ -7,12 +7,22 @@ use Illuminate\Database\Seeder;
 
 class ShuttleRouteSeeder extends Seeder
 {
+    public const ORIGIN = 'PAGCOR Headquarters';
+
+    /** Active but never scheduled, so it can be deleted or newly rostered. */
+    public const UNSCHEDULED_DESTINATION = 'Cavite City';
+
+    /** Discontinued routes retained for historical reporting. */
+    public const DISCONTINUED_DESTINATIONS = ['Baliuag', 'Lipa City'];
+
     /**
-     * Run the database seeds.
+     * Every destination served from headquarters, in roster order.
+     *
+     * @return list<string>
      */
-    public function run(): void
+    public static function destinations(): array
     {
-        $cities = [
+        return [
             'Manila',
             'Quezon City',
             'Makati City',
@@ -38,14 +48,33 @@ class ShuttleRouteSeeder extends Seeder
             'San Pedro City',
             'Calamba City',
         ];
+    }
 
-        foreach ($cities as $city) {
+    public static function routeName(string $destination): string
+    {
+        return self::ORIGIN.' - '.$destination;
+    }
+
+    /**
+     * Run the database seeds.
+     */
+    public function run(): void
+    {
+        $destinations = [
+            ...self::destinations(),
+            self::UNSCHEDULED_DESTINATION,
+            ...self::DISCONTINUED_DESTINATIONS,
+        ];
+
+        foreach ($destinations as $destination) {
             ShuttleRoute::query()->updateOrCreate(
-                ['name' => "PAGCOR Headquarters - {$city}"],
+                ['name' => self::routeName($destination)],
                 [
-                    'origin' => 'PAGCOR Headquarters',
-                    'destination' => $city,
-                    'status' => 'ACTIVE',
+                    'origin' => self::ORIGIN,
+                    'destination' => $destination,
+                    'status' => in_array($destination, self::DISCONTINUED_DESTINATIONS, true)
+                        ? 'INACTIVE'
+                        : 'ACTIVE',
                 ],
             );
         }

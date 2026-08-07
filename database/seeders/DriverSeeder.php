@@ -3,77 +3,128 @@
 namespace Database\Seeders;
 
 use App\Models\Driver;
-use App\Models\Employee;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Seeder;
 
+/**
+ * Drivers are tracked separately from employees: the `employee_id` column on the
+ * drivers table is a free-text employee/contractor reference, not a foreign key.
+ */
 class DriverSeeder extends Seeder
 {
+    /** License already lapsed; surfaces the expiry warning in the driver list. */
+    public const EXPIRED_LICENSE_DRIVER = 'Hernando Yabut';
+
+    /** License lapses within the month. */
+    public const EXPIRING_LICENSE_DRIVER = 'Isagani Laurel';
+
+    /** Currently off the roster, so no active schedule may reference them. */
+    public const INACTIVE_DRIVERS = ['Joaquin Panganiban', 'Leopoldo Tuazon'];
+
+    /** Active but never rostered; shows as an idle driver in the utilization report. */
+    public const UNASSIGNED_DRIVER = 'Nestor Cabral';
+
     /**
      * Run the database seeds.
      */
     public function run(): void
     {
-        $drivers = [
-            ['name' => 'Roberto Dela Cruz', 'email' => 'roberto.delacruz@pagcor.example'],
-            ['name' => 'Eduardo Ramos', 'email' => 'eduardo.ramos@pagcor.example'],
-            ['name' => 'Antonio Castillo', 'email' => 'antonio.castillo@pagcor.example'],
-            ['name' => 'Noel Fernandez', 'email' => 'noel.fernandez@pagcor.example'],
-            ['name' => 'Jaime Torres', 'email' => 'jaime.torres@pagcor.example'],
-            ['name' => 'Danilo Mercado', 'email' => 'danilo.mercado@pagcor.example'],
-            ['name' => 'Manuel Salazar', 'email' => 'manuel.salazar@pagcor.example'],
-            ['name' => 'Renato Domingo', 'email' => 'renato.domingo@pagcor.example'],
-            ['name' => 'Victor Soriano', 'email' => 'victor.soriano@pagcor.example'],
-            ['name' => 'Alfredo Valdez', 'email' => 'alfredo.valdez@pagcor.example'],
-            ['name' => 'Benjamin Lim', 'email' => 'benjamin.lim@pagcor.example'],
-            ['name' => 'Ricardo Pascual', 'email' => 'ricardo.pascual@pagcor.example'],
-            ['name' => 'Andres Villareal', 'email' => 'andres.villareal@pagcor.example'],
-            ['name' => 'Cesar Manalo', 'email' => 'cesar.manalo@pagcor.example'],
-            ['name' => 'Domingo Evangelista', 'email' => 'domingo.evangelista@pagcor.example'],
-            ['name' => 'Ernesto Macapagal', 'email' => 'ernesto.macapagal@pagcor.example'],
-            ['name' => 'Felipe Tolentino', 'email' => 'felipe.tolentino@pagcor.example'],
-            ['name' => 'Gregorio Abad', 'email' => 'gregorio.abad@pagcor.example'],
-            ['name' => 'Hernando Yabut', 'email' => 'hernando.yabut@pagcor.example'],
-            ['name' => 'Isagani Laurel', 'email' => 'isagani.laurel@pagcor.example'],
-            ['name' => 'Joaquin Panganiban', 'email' => 'joaquin.panganiban@pagcor.example'],
-            ['name' => 'Leopoldo Tuazon', 'email' => 'leopoldo.tuazon@pagcor.example'],
-            ['name' => 'Maximo Samonte', 'email' => 'maximo.samonte@pagcor.example'],
-            ['name' => 'Nestor Cabral', 'email' => 'nestor.cabral@pagcor.example'],
-        ];
         $today = CarbonImmutable::now(
             (string) config('shuttle.operating_timezone', 'Asia/Manila')
         )->startOfDay();
 
-        foreach ($drivers as $index => $driverData) {
+        foreach ($this->drivers() as $index => $driver) {
             $sequence = $index + 1;
-            $contactNumber = sprintf('0918%07d', 1230000 + $sequence);
-            $employee = Employee::query()->updateOrCreate(
-                ['email' => $driverData['email']],
-                [
-                    'name' => $driverData['name'],
-                    'contact_number' => $contactNumber,
-                    'department' => 'Transportation Services',
-                    'position' => 'Shuttle Driver',
-                    'priority_status' => Employee::PRIORITY_STATUS_REGULAR,
-                    'status' => Employee::STATUS_ACTIVE,
-                ],
-            );
 
             Driver::query()->updateOrCreate(
-                ['employee_id' => (string) $employee->employee_id],
+                ['license_number' => sprintf('N01-18-%06d', 100000 + $sequence)],
                 [
-                    'name' => $employee->name,
-                    'contact_number' => $contactNumber,
-                    'license_number' => sprintf('N01-18-%06d', 100000 + $sequence),
+                    'name' => $driver['name'],
+                    'employee_id' => $driver['employee_id'],
+                    'contact_number' => sprintf('0918%07d', 1230000 + $sequence),
                     'license_expires_at' => $today
-                        ->addYears(2)
-                        ->addMonths(($sequence - 1) % 12)
-                        ->addDays(($sequence * 3) % 20)
+                        ->addDays($driver['license_expires_in_days'])
                         ->toDateString(),
-                    'status' => 'ACTIVE',
-                    'notes' => 'Assigned to PAGCOR employee shuttle service.',
+                    'status' => $driver['status'],
+                    'notes' => $driver['notes'],
                 ],
             );
         }
+    }
+
+    /**
+     * @return list<array{
+     *     name: string,
+     *     employee_id: string,
+     *     license_expires_in_days: int,
+     *     status: string,
+     *     notes: ?string
+     * }>
+     */
+    private function drivers(): array
+    {
+        $names = [
+            'Roberto Dela Cruz',
+            'Eduardo Ramos',
+            'Antonio Castillo',
+            'Noel Fernandez',
+            'Jaime Torres',
+            'Danilo Mercado',
+            'Manuel Salazar',
+            'Renato Domingo',
+            'Victor Soriano',
+            'Alfredo Valdez',
+            'Benjamin Lim',
+            'Ricardo Pascual',
+            'Andres Villareal',
+            'Cesar Manalo',
+            'Domingo Evangelista',
+            'Ernesto Macapagal',
+            'Felipe Tolentino',
+            'Gregorio Abad',
+            self::EXPIRED_LICENSE_DRIVER,
+            self::EXPIRING_LICENSE_DRIVER,
+            self::INACTIVE_DRIVERS[0],
+            self::INACTIVE_DRIVERS[1],
+            'Maximo Samonte',
+            self::UNASSIGNED_DRIVER,
+            'Perfecto Bandoy',
+            'Rogelio Sarmiento',
+            'Teofilo Aguinaldo',
+            'Ulysses Bituin',
+            'Valentin Carreon',
+            'Wilfredo Doronila',
+        ];
+        $drivers = [];
+
+        foreach ($names as $index => $name) {
+            $sequence = $index + 1;
+            $drivers[] = [
+                'name' => $name,
+                /* Contractors are identified with a CTR prefix, staff drivers with TS. */
+                'employee_id' => $sequence % 8 === 0
+                    ? sprintf('CTR-%04d', $sequence)
+                    : sprintf('TS-%04d', $sequence),
+                'license_expires_in_days' => match ($name) {
+                    self::EXPIRED_LICENSE_DRIVER => -34,
+                    self::EXPIRING_LICENSE_DRIVER => 12,
+                    default => 240 + ($sequence * 37) % 900,
+                },
+                'status' => in_array($name, self::INACTIVE_DRIVERS, true)
+                    ? 'INACTIVE'
+                    : 'ACTIVE',
+                'notes' => match (true) {
+                    $name === self::EXPIRED_LICENSE_DRIVER => 'License renewal pending at the LTO.',
+                    $name === self::EXPIRING_LICENSE_DRIVER => 'Reminded to renew before the expiry date.',
+                    $name === self::INACTIVE_DRIVERS[0] => 'On extended medical leave.',
+                    $name === self::INACTIVE_DRIVERS[1] => 'Resigned; retained for historical records.',
+                    $name === self::UNASSIGNED_DRIVER => 'Relief driver, not yet rostered.',
+                    $sequence % 5 === 0 => null,
+                    default => 'Assigned to PAGCOR employee shuttle service.',
+                },
+            ];
+        }
+
+        return $drivers;
     }
 }
