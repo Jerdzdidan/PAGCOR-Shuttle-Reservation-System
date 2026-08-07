@@ -1,4 +1,5 @@
 import { AdminDataTable, type AdminTableColumn } from '@/components/admin/admin-data-table';
+import { ServiceActivitySheet } from '@/components/admin/service-activity-sheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -29,6 +30,7 @@ export default function RoutesPage({ routes }: RoutesPageProps) {
     const [formOpen, setFormOpen] = useState(false);
     const [editingRoute, setEditingRoute] = useState<ManagedRoute | null>(null);
     const [deletingRoute, setDeletingRoute] = useState<ManagedRoute | null>(null);
+    const [activityRoute, setActivityRoute] = useState<ManagedRoute | null>(null);
     const form = useForm<RouteFormData>(emptyForm);
     const deleteForm = useForm<Record<string, never>>({});
     const columns: AdminTableColumn<ManagedRoute>[] = [
@@ -104,6 +106,7 @@ export default function RoutesPage({ routes }: RoutesPageProps) {
                     getSearchText={(route) => `${route.name} ${route.origin} ${route.destination} ${route.status}`}
                     onEdit={openEdit}
                     onDelete={setDeletingRoute}
+                    extraActions={[{ label: 'Activity', onSelect: setActivityRoute }]}
                     filterOptions={[
                         { value: 'ALL', label: 'All statuses' },
                         { value: 'ACTIVE', label: 'Active' },
@@ -112,6 +115,15 @@ export default function RoutesPage({ routes }: RoutesPageProps) {
                     getFilterValue={(route) => route.status}
                 />
             </div>
+
+            <ServiceActivitySheet
+                subject="ROUTE"
+                endpoint="/admin/routes"
+                subjectId={activityRoute?.id ?? null}
+                subjectLabel={activityRoute?.name ?? ''}
+                open={activityRoute !== null}
+                onOpenChange={(open) => !open && setActivityRoute(null)}
+            />
             <Dialog open={formOpen} onOpenChange={(open) => !form.processing && setFormOpen(open)}>
                 <DialogContent>
                     <DialogHeader>

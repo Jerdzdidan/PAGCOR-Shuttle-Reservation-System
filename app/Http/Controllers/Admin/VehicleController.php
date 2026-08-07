@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreVehicleRequest;
 use App\Http\Requests\UpdateVehicleRequest;
 use App\Models\Vehicle;
+use App\Services\VehicleActivityData;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -65,6 +67,16 @@ class VehicleController extends Controller
     public function edit(Vehicle $vehicle): never
     {
         abort(404);
+    }
+
+    /**
+     * Return the vehicle's past, current, and upcoming service runs.
+     */
+    public function activity(
+        Vehicle $vehicle,
+        VehicleActivityData $activityData,
+    ): JsonResponse {
+        return response()->json($activityData->forVehicle($vehicle));
     }
 
     /**

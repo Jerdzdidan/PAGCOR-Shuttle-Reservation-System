@@ -25,6 +25,10 @@ export interface BreadcrumbItem {
 export interface NavGroup {
     title: string;
     items: NavItem[];
+    /** Renders the group behind a toggle so long lists do not crowd the sidebar. */
+    collapsible?: boolean;
+    /** Only applies when `collapsible` is set. Defaults to closed. */
+    defaultOpen?: boolean;
 }
 
 export interface NavItem {

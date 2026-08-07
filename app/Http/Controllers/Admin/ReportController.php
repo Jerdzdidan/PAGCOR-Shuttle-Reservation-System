@@ -6,6 +6,7 @@ use App\Exports\AdminReportExport;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ReportRequest;
 use App\Services\AdminReportService;
+use App\Services\Reports\ReportCatalog;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Response;
@@ -17,10 +18,13 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class ReportController extends Controller
 {
-    public function index(): RedirectResponse
+    /**
+     * The report catalogue — the entry point that explains what each report answers.
+     */
+    public function index(): InertiaResponse
     {
-        return to_route('admin.reports.show', [
-            'reportSlug' => AdminReportService::defaultReportSlug(),
+        return Inertia::render('admin/reports/index', [
+            'groups' => ReportCatalog::grouped(),
         ]);
     }
 
@@ -28,7 +32,11 @@ class ReportController extends Controller
         ReportRequest $request,
         AdminReportService $reports,
         string $reportSlug,
-    ): InertiaResponse {
+    ): InertiaResponse|RedirectResponse {
+        if ($redirect = $this->redirectLegacySlug($request, $reportSlug, 'admin.reports.show')) {
+            return $redirect;
+        }
+
         return Inertia::render(
             "admin/reports/{$reportSlug}",
             $reports->report($request->validated()),
@@ -39,7 +47,11 @@ class ReportController extends Controller
         ReportRequest $request,
         AdminReportService $reports,
         string $reportSlug,
-    ): BinaryFileResponse|Response {
+    ): BinaryFileResponse|Response|RedirectResponse {
+        if ($redirect = $this->redirectLegacySlug($request, $reportSlug, 'admin.reports.export')) {
+            return $redirect;
+        }
+
         $filters = $request->validated();
         $format = $filters['format'] ?? 'xlsx';
         $report = $reports->export($filters);
@@ -55,6 +67,28 @@ class ReportController extends Controller
             new AdminReportExport($report['headings'], $report['rows']),
             $filename.'.'.$format,
             $format === 'csv' ? Excel::CSV : Excel::XLSX,
+        );
+    }
+
+    /**
+     * Sends retired slugs to their replacement, preserving any filters on the URL.
+     */
+    private function redirectLegacySlug(
+        ReportRequest $request,
+        string $reportSlug,
+        string $routeName,
+    ): ?RedirectResponse {
+        $slug = ReportCatalog::slugReplacing($reportSlug);
+
+        if ($slug === null) {
+            return null;
+        }
+
+        // `report` is derived from the slug, so it must not travel with the redirect.
+        return redirect()->route(
+            $routeName,
+            ['reportSlug' => $slug, ...collect($request->query())->except('report')->all()],
+            301,
         );
     }
 }

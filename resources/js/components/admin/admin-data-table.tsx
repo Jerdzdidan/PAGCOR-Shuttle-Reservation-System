@@ -14,6 +14,12 @@ export interface AdminTableColumn<T> {
     sortValue?: (item: T) => string | number;
 }
 
+export interface AdminTableAction<T> {
+    label: string;
+    onSelect: (item: T) => void;
+    disabled?: (item: T) => boolean;
+}
+
 interface AdminDataTableProps<T extends object> {
     data: T[];
     columns: AdminTableColumn<T>[];
@@ -24,6 +30,7 @@ interface AdminDataTableProps<T extends object> {
     onEdit: (item: T) => void;
     onDelete: (item: T) => void;
     deleteDisabled?: (item: T) => boolean;
+    extraActions?: AdminTableAction<T>[];
     filterOptions?: { value: string; label: string }[];
     getFilterValue?: (item: T) => string;
 }
@@ -38,6 +45,7 @@ export function AdminDataTable<T extends object>({
     onEdit,
     onDelete,
     deleteDisabled,
+    extraActions,
     filterOptions,
     getFilterValue,
 }: AdminDataTableProps<T>) {
@@ -166,6 +174,15 @@ export function AdminDataTable<T extends object>({
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
                                                 {onView && <DropdownMenuItem onClick={() => onView(item)}>View</DropdownMenuItem>}
+                                                {extraActions?.map((action) => (
+                                                    <DropdownMenuItem
+                                                        key={action.label}
+                                                        disabled={action.disabled?.(item)}
+                                                        onClick={() => action.onSelect(item)}
+                                                    >
+                                                        {action.label}
+                                                    </DropdownMenuItem>
+                                                ))}
                                                 <DropdownMenuItem onClick={() => onEdit(item)}>Edit</DropdownMenuItem>
                                                 <DropdownMenuItem disabled={deleteDisabled?.(item)} onClick={() => onDelete(item)}>
                                                     Delete

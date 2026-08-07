@@ -1,4 +1,5 @@
 import { AdminDataTable, type AdminTableColumn } from '@/components/admin/admin-data-table';
+import { EmployeeActivitySheet } from '@/components/admin/employee-activity-sheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -101,6 +102,7 @@ export default function EmployeesPage({ employees, departments }: EmployeesPageP
     const [viewingEmployee, setViewingEmployee] = useState<ManagedEmployee | null>(null);
     const [deletingEmployee, setDeletingEmployee] = useState<ManagedEmployee | null>(null);
     const [deactivatingEmployee, setDeactivatingEmployee] = useState<ManagedEmployee | null>(null);
+    const [activityEmployee, setActivityEmployee] = useState<ManagedEmployee | null>(null);
     const qrCanvasRef = useRef<HTMLCanvasElement>(null);
     const form = useForm<EmployeeFormData>(emptyForm);
     const importForm = useForm<{ file: File | null }>({ file: null });
@@ -359,6 +361,7 @@ export default function EmployeesPage({ employees, departments }: EmployeesPageP
                         deleteForm.clearErrors();
                         setDeletingEmployee(employee);
                     }}
+                    extraActions={[{ label: 'Activity', onSelect: setActivityEmployee }]}
                 />
             </div>
 
@@ -640,6 +643,13 @@ export default function EmployeesPage({ employees, departments }: EmployeesPageP
                     )}
                 </DialogContent>
             </Dialog>
+
+            <EmployeeActivitySheet
+                employeeId={activityEmployee?.employee_id ?? null}
+                employeeName={activityEmployee?.name ?? ''}
+                open={activityEmployee !== null}
+                onOpenChange={(open) => !open && setActivityEmployee(null)}
+            />
 
             <Dialog
                 open={deactivatingEmployee !== null}

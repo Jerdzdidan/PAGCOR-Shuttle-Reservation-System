@@ -17,7 +17,7 @@ use App\Http\Controllers\Employee\DashboardController as EmployeeDashboardContro
 use App\Http\Controllers\Employee\ReservationController as EmployeeReservationController;
 use App\Http\Controllers\Employee\ScheduleController as EmployeeScheduleController;
 use App\Http\Controllers\Employee\WaitlistController as EmployeeWaitlistController;
-use App\Services\AdminReportService;
+use App\Services\Reports\ReportCatalog;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth'])->get('/', function () {
@@ -32,6 +32,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::resource('users', UserController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::post('employees/import', [EmployeeController::class, 'import'])->name('employees.import');
     Route::post('employees/{employee}/deactivate', [EmployeeController::class, 'deactivate'])->name('employees.deactivate');
+    Route::get('employees/{employee}/activity', [EmployeeController::class, 'activity'])->name('employees.activity');
     Route::resource('employees', EmployeeController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::resource('departments', DepartmentController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::get('finished-services', [FinishedServiceController::class, 'index'])->name('finished_services.index');
@@ -54,13 +55,16 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         ->name('finished_services.reopen');
     Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
     Route::get('reports/{reportSlug}/export', [ReportController::class, 'export'])
-        ->whereIn('reportSlug', AdminReportService::reportSlugs())
+        ->whereIn('reportSlug', ReportCatalog::routableSlugs())
         ->name('reports.export');
     Route::get('reports/{reportSlug}', [ReportController::class, 'show'])
-        ->whereIn('reportSlug', AdminReportService::reportSlugs())
+        ->whereIn('reportSlug', ReportCatalog::routableSlugs())
         ->name('reports.show');
+    Route::get('vehicles/{vehicle}/activity', [VehicleController::class, 'activity'])->name('vehicles.activity');
     Route::resource('vehicles', VehicleController::class)->only(['index', 'store', 'update', 'destroy']);
+    Route::get('drivers/{driver}/activity', [DriverController::class, 'activity'])->name('drivers.activity');
     Route::resource('drivers', DriverController::class)->only(['index', 'store', 'update', 'destroy']);
+    Route::get('routes/{route}/activity', [ShuttleRouteController::class, 'activity'])->name('routes.activity');
     Route::resource('routes', ShuttleRouteController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::put('schedules/booking-window', [ShuttleScheduleController::class, 'updateBookingWindow'])
         ->name('schedules.booking_window.update');

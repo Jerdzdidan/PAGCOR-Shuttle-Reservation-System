@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\EmployeeLoginMethod;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LogicException;
@@ -18,6 +19,7 @@ class EmployeeLoginLog extends Model
         'employee_name',
         'department',
         'priority_status',
+        'login_method',
         'logged_in_at',
     ];
 
@@ -37,6 +39,7 @@ class EmployeeLoginLog extends Model
     {
         return [
             'employee_id_snapshot' => 'integer',
+            'login_method' => EmployeeLoginMethod::class,
             'logged_in_at' => 'datetime',
         ];
     }

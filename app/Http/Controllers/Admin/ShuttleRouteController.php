@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreShuttleRouteRequest;
 use App\Http\Requests\UpdateShuttleRouteRequest;
 use App\Models\ShuttleRoute;
+use App\Services\RouteActivityData;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -53,6 +55,16 @@ class ShuttleRouteController extends Controller
     public function edit(ShuttleRoute $route): never
     {
         abort(404);
+    }
+
+    /**
+     * Return the route's past, current, and upcoming service runs.
+     */
+    public function activity(
+        ShuttleRoute $route,
+        RouteActivityData $activityData,
+    ): JsonResponse {
+        return response()->json($activityData->forRoute($route));
     }
 
     /**

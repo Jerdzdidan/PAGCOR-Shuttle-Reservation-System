@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin;
 
 use App\Services\AdminReportService;
+use App\Services\Reports\ReportCatalog;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -45,12 +46,40 @@ class ReportRequest extends FormRequest
             'route_id' => ['nullable', 'integer', 'exists:shuttle_routes,id'],
             'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'],
             'driver_id' => ['nullable', 'integer', 'exists:drivers,id'],
+            'schedule_id' => ['nullable', 'integer', 'exists:shuttle_schedules,id'],
             'department' => ['nullable', 'string', 'max:100'],
             'priority_status' => ['nullable', 'string', Rule::in(['REGULAR', 'PRIORITY'])],
-            'status' => ['nullable', 'string', 'max:50'],
+            'status' => ['nullable', 'string', Rule::in($this->allowedStatuses())],
+            'sort' => ['nullable', 'string', Rule::in($this->allowedSortKeys())],
+            'direction' => ['nullable', 'string', Rule::in(['asc', 'desc'])],
             'per_page' => ['required', 'integer', 'min:10', 'max:100'],
             'page' => ['nullable', 'integer', 'min:1'],
             'format' => ['nullable', 'string', Rule::in(['xlsx', 'csv', 'pdf'])],
         ];
+    }
+
+    /**
+     * Statuses the current report actually understands, so a stale filter fails loudly
+     * instead of silently returning nothing.
+     *
+     * @return list<string>
+     */
+    private function allowedStatuses(): array
+    {
+        $report = $this->input('report');
+
+        return is_string($report) && ReportCatalog::exists($report)
+            ? array_column(ReportCatalog::statusOptions($report), 'value')
+            : [];
+    }
+
+    /** @return list<string> */
+    private function allowedSortKeys(): array
+    {
+        $report = $this->input('report');
+
+        return is_string($report) && ReportCatalog::exists($report)
+            ? ReportCatalog::columnKeys($report)
+            : [];
     }
 }

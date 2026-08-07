@@ -19,6 +19,7 @@ import {
     CheckCircle2,
     ClipboardCheck,
     Clock3,
+    Download,
     Gauge,
     History,
     LoaderCircle,
@@ -254,6 +255,16 @@ function ServiceDetailPanel({
     const departureValue = occurrence.departure_time ?? occurrence.scheduled_departure_at;
     const routeOrigin = occurrence.route_origin ?? occurrence.origin ?? occurrence.route?.origin;
     const routeDestination = occurrence.route_destination ?? occurrence.destination ?? occurrence.route?.destination;
+    /** Pre-filters the passenger manifest report down to this exact run. */
+    const scheduleId = occurrence.shuttle_schedule_id;
+    const manifestExportUrl = scheduleId
+        ? `/admin/reports/passenger-manifest/export?${new URLSearchParams({
+              schedule_id: String(scheduleId),
+              date_from: occurrence.travel_date,
+              date_to: occurrence.travel_date,
+              format: 'csv',
+          }).toString()}`
+        : null;
 
     return (
         <div className="space-y-6 p-5 sm:p-7">
@@ -286,6 +297,16 @@ function ServiceDetailPanel({
                     <DetailMetric icon={UsersRound} label="Capacity" value={`${occurrence.effective_capacity} seats`} />
                     <DetailMetric icon={ClipboardCheck} label="Attendance" value={`${boardedCount} of ${entries.length} boarded`} />
                 </div>
+                {manifestExportUrl && (
+                    <div className="flex justify-end border-t p-3">
+                        <Button variant="outline" size="sm" asChild>
+                            <a href={manifestExportUrl}>
+                                <Download />
+                                Export attendance (CSV)
+                            </a>
+                        </Button>
+                    </div>
+                )}
             </section>
 
             <div className="bg-muted grid grid-cols-2 rounded-xl p-1">

@@ -14,11 +14,9 @@ import {
     ClipboardCheck,
     ClipboardList,
     ContactRound,
-    Gauge,
     LayoutGrid,
+    LayoutList,
     Route,
-    ScanLine,
-    TriangleAlert,
     UserRound,
     Users,
 } from 'lucide-react';
@@ -89,39 +87,24 @@ const mainNavGroups: NavGroup[] = [
         title: 'Reports',
         items: [
             {
-                title: 'Service Completion',
-                url: '/admin/reports/service-completion',
+                title: 'All reports',
+                url: '/admin/reports',
+                icon: LayoutList,
+            },
+            {
+                title: 'Service Delivery',
+                url: '/admin/reports/service-delivery',
                 icon: ClipboardCheck,
             },
             {
-                title: 'Fleet Utilization',
-                url: '/admin/reports/fleet-utilization',
-                icon: BarChart3,
-            },
-            {
-                title: 'Route & Schedule Demand',
-                url: '/admin/reports/route-schedule-demand',
-                icon: Route,
-            },
-            {
-                title: 'Shuttle Attendance',
-                url: '/admin/reports/shuttle-attendance',
+                title: 'Schedule Attendance',
+                url: '/admin/reports/schedule-attendance',
                 icon: ClipboardList,
             },
             {
-                title: 'Driver Utilization',
-                url: '/admin/reports/driver-utilization',
-                icon: Gauge,
-            },
-            {
-                title: 'Login Activity',
-                url: '/admin/reports/login-activity',
-                icon: ScanLine,
-            },
-            {
-                title: 'Incident Log',
-                url: '/admin/reports/incident-log',
-                icon: TriangleAlert,
+                title: 'Route Demand',
+                url: '/admin/reports/route-demand',
+                icon: BarChart3,
             },
         ],
     },
@@ -165,10 +148,10 @@ export function AppSidebar() {
 
     return (
         <Sidebar collapsible="icon" variant="inset">
-            <SidebarHeader className="border-sidebar-border/80 from-sidebar to-brand-navy/90 border-b bg-gradient-to-b p-3">
+            <SidebarHeader className="border-sidebar-border/60 from-sidebar to-brand-navy/90 border-b bg-gradient-to-b p-3">
                 <SidebarMenu>
                     <SidebarMenuItem>
-                        <SidebarMenuButton size="lg" asChild>
+                        <SidebarMenuButton size="lg" asChild className="hover:bg-sidebar-accent/60">
                             <Link href="/dashboard" prefetch>
                                 <AppLogo />
                             </Link>
@@ -177,12 +160,12 @@ export function AppSidebar() {
                 </SidebarMenu>
             </SidebarHeader>
 
-            <SidebarContent className="pt-3">
+            <SidebarContent className="[&::-webkit-scrollbar-thumb]:bg-sidebar-foreground/15 hover:[&::-webkit-scrollbar-thumb]:bg-sidebar-foreground/30 gap-1 py-3 [scrollbar-color:var(--color-sidebar-border)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:transition-colors [&::-webkit-scrollbar-track]:bg-transparent">
                 <NavMain groups={visibleMainNavGroups} />
             </SidebarContent>
 
-            <SidebarFooter>
-                <NavFooter items={footerNavItems} className="mt-auto" />
+            <SidebarFooter className="border-sidebar-border/60 mt-auto gap-1 border-t pt-2">
+                <NavFooter items={footerNavItems} />
                 <NavUser />
             </SidebarFooter>
         </Sidebar>

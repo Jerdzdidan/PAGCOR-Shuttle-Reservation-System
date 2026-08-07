@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Employee\Auth;
 
+use App\Enums\EmployeeLoginMethod;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Employee\Auth\EmployeeCodeLoginRequest;
 use App\Http\Requests\Employee\Auth\EmployeeQrLoginRequest;
@@ -37,7 +38,7 @@ class AuthenticatedSessionController extends Controller
             ]);
         }
 
-        return $this->authenticate($request, $employee, 'credential');
+        return $this->authenticate($request, $employee, 'credential', EmployeeLoginMethod::QrScan);
     }
 
     public function storeCode(
@@ -52,15 +53,16 @@ class AuthenticatedSessionController extends Controller
             ]);
         }
 
-        return $this->authenticate($request, $employee, 'employee_code');
+        return $this->authenticate($request, $employee, 'employee_code', EmployeeLoginMethod::EmployeeCode);
     }
 
     private function authenticate(
         Request $request,
         Employee $employee,
         string $errorKey,
+        EmployeeLoginMethod $loginMethod,
     ): RedirectResponse {
-        $authenticatedEmployee = DB::transaction(function () use ($employee, $errorKey): Employee {
+        $authenticatedEmployee = DB::transaction(function () use ($employee, $errorKey, $loginMethod): Employee {
             $lockedEmployee = Employee::query()
                 ->lockForUpdate()
                 ->findOrFail($employee->getKey());
@@ -80,6 +82,7 @@ class AuthenticatedSessionController extends Controller
                 'employee_name' => $lockedEmployee->name,
                 'department' => $lockedEmployee->department,
                 'priority_status' => $lockedEmployee->priority_status,
+                'login_method' => $loginMethod,
                 'logged_in_at' => now(),
             ]);
 

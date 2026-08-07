@@ -14,12 +14,14 @@ use App\Models\ShuttleReservation;
 use App\Models\ShuttleServiceOccurrence;
 use App\Models\ShuttleWaitlistEntry;
 use App\Services\DeactivateEmployeeService;
+use App\Services\EmployeeActivityData;
 use App\Services\EmployeeIdentifier;
 use App\Services\EmployeeQrCredential;
 use App\Services\ShuttleSeatPolicy;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -116,6 +118,16 @@ class EmployeeController extends Controller
     public function edit(Employee $employee): never
     {
         abort(404);
+    }
+
+    /**
+     * Return the employee's login, boarding, and current reservation trail.
+     */
+    public function activity(
+        Employee $employee,
+        EmployeeActivityData $activityData,
+    ): JsonResponse {
+        return response()->json($activityData->forEmployee($employee));
     }
 
     /**

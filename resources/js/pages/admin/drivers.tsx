@@ -1,4 +1,5 @@
 import { AdminDataTable, type AdminTableColumn } from '@/components/admin/admin-data-table';
+import { ServiceActivitySheet } from '@/components/admin/service-activity-sheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -48,6 +49,7 @@ export default function DriversPage({ drivers }: DriversPageProps) {
     const [formOpen, setFormOpen] = useState(false);
     const [editingDriver, setEditingDriver] = useState<ManagedDriver | null>(null);
     const [deletingDriver, setDeletingDriver] = useState<ManagedDriver | null>(null);
+    const [activityDriver, setActivityDriver] = useState<ManagedDriver | null>(null);
     const form = useForm<DriverFormData>(emptyForm);
     const deleteForm = useForm<Record<string, never>>({});
     const columns: AdminTableColumn<ManagedDriver>[] = [
@@ -134,6 +136,7 @@ export default function DriversPage({ drivers }: DriversPageProps) {
                     }
                     onEdit={openEdit}
                     onDelete={setDeletingDriver}
+                    extraActions={[{ label: 'Activity', onSelect: setActivityDriver }]}
                     filterOptions={[
                         { value: 'ALL', label: 'All statuses' },
                         { value: 'ACTIVE', label: 'Active' },
@@ -142,6 +145,15 @@ export default function DriversPage({ drivers }: DriversPageProps) {
                     getFilterValue={(driver) => driver.status}
                 />
             </div>
+
+            <ServiceActivitySheet
+                subject="DRIVER"
+                endpoint="/admin/drivers"
+                subjectId={activityDriver?.id ?? null}
+                subjectLabel={activityDriver?.name ?? ''}
+                open={activityDriver !== null}
+                onOpenChange={(open) => !open && setActivityDriver(null)}
+            />
 
             <Dialog open={formOpen} onOpenChange={(open) => !form.processing && setFormOpen(open)}>
                 <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">

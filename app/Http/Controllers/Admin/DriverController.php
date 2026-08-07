@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreDriverRequest;
 use App\Http\Requests\UpdateDriverRequest;
 use App\Models\Driver;
+use App\Services\DriverActivityData;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -53,6 +55,16 @@ class DriverController extends Controller
     public function edit(Driver $driver): never
     {
         abort(404);
+    }
+
+    /**
+     * Return the driver's past, current, and upcoming service runs.
+     */
+    public function activity(
+        Driver $driver,
+        DriverActivityData $activityData,
+    ): JsonResponse {
+        return response()->json($activityData->forDriver($driver));
     }
 
     /**

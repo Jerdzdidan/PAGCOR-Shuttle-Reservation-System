@@ -1,4 +1,5 @@
 import { AdminDataTable, type AdminTableColumn } from '@/components/admin/admin-data-table';
+import { ServiceActivitySheet } from '@/components/admin/service-activity-sheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -50,6 +51,7 @@ export default function VehiclesPage({ vehicles }: VehiclesPageProps) {
     const [formOpen, setFormOpen] = useState(false);
     const [editingVehicle, setEditingVehicle] = useState<ManagedVehicle | null>(null);
     const [deletingVehicle, setDeletingVehicle] = useState<ManagedVehicle | null>(null);
+    const [activityVehicle, setActivityVehicle] = useState<ManagedVehicle | null>(null);
     const form = useForm<VehicleFormData>(emptyForm);
     const deleteForm = useForm<Record<string, never>>({});
 
@@ -132,6 +134,7 @@ export default function VehiclesPage({ vehicles }: VehiclesPageProps) {
                     getSearchText={(vehicle) => `${vehicle.plate_number} ${vehicle.vehicle_type} ${vehicle.status}`}
                     onEdit={openEdit}
                     onDelete={setDeletingVehicle}
+                    extraActions={[{ label: 'Activity', onSelect: setActivityVehicle }]}
                     filterOptions={[
                         { value: 'ALL', label: 'All statuses' },
                         { value: 'ACTIVE', label: 'Active' },
@@ -141,6 +144,15 @@ export default function VehiclesPage({ vehicles }: VehiclesPageProps) {
                     getFilterValue={(vehicle) => vehicle.status}
                 />
             </div>
+
+            <ServiceActivitySheet
+                subject="VEHICLE"
+                endpoint="/admin/vehicles"
+                subjectId={activityVehicle?.id ?? null}
+                subjectLabel={activityVehicle?.plate_number ?? ''}
+                open={activityVehicle !== null}
+                onOpenChange={(open) => !open && setActivityVehicle(null)}
+            />
 
             <Dialog open={formOpen} onOpenChange={(open) => !form.processing && setFormOpen(open)}>
                 <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">

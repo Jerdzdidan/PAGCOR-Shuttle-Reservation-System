@@ -335,7 +335,7 @@ export default function FinishedServicesPage({
                         </p>
                     </div>
                     <Button variant="outline" asChild>
-                        <Link href="/admin/reports/service-completion">
+                        <Link href="/admin/reports">
                             View operational reports
                             <ArrowRight />
                         </Link>
